@@ -1,0 +1,35 @@
+{
+    "odm_type": "Assemblyline Result Ontology",
+    "odm_version": "1.3",
+    "classification": "TLP:WHITE",
+    "file": {
+        "md5": "e8d5196d3c78355b65e7237fc6a0734f",
+        "sha1": "5bfeca3b59a7d2e7d2c78e1116026d79f23efaaf",
+        "sha256": "22a846c0054b26e996a9060ba85569f03a6a820ddc9a7066ecbccbc665e690bf",
+        "type": "executable/windows/pe64",
+        "size": 137376,
+        "parent": "d81fff7122296dfd423c6000380e1910855096ec8c8a09d4c26a56549511a78c"
+    },
+    "service": {
+        "name": "FooService",
+        "version": "4.4.0.0",
+        "tool_version": null
+    },
+    "results": {
+        "tags": {},
+        "heuristics": [],
+        "score": 0
+    },
+    "submission": {
+        "metadata": {},
+        "date": "2023-03-30T20:49:09.418871Z",
+        "source_system": "al4.local",
+        "sid": "6aJIUPI2AohKtTcsxMSNa1",
+        "classification": "TLP:WHITE",
+        "submitter": "admin",
+        "groups": [
+            "USERS"
+        ],
+        "max_score": 700
+    }
+}

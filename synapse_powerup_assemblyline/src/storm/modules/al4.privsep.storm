@@ -1,0 +1,688 @@
+/* al4.privsep
+
+    Internal functions considered to be privileged.                                                                              |
+    
+    Permissions: requires the user to be a member of power-ups.al4.user
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__setupMod = $lib.import(al4.setup)
+    $__modName = "al4.privsep"
+}
+
+
+function downloadFile(sha256) {
+    /*
+        Download a file from Assemblyline into the Axon.
+
+        Parameters:
+            sha256 (str):
+    
+        Returns:
+            hashes (dict): File hashes or $lib.null
+    */
+
+    if (not $sha256) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sha256",
+            ctx=({"module": $__modName, "func": "downloadFile"}))
+    }
+
+    if ($lib.bytes.has($sha256)) {
+        // file already in axon
+        $__commMod.printDebug($lib.str.format("{sha256} already in the axon, skipping download.", sha256=$sha256))
+
+        return($lib.bytes.hashset($sha256))
+    }
+    
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/file/download/{sha256}/", host=$apiHost, sha256=$sha256)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    $params = $lib.dict(
+        "encoding"="raw",
+    )
+
+    $resp = $lib.axon.wget($url, headers=$headers, params=$params, proxy=$__setupMod.getProxy())
+
+    $retn = $lib.null
+    if ($resp.code = 200) {
+        $retn = $resp.hashes
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to download file: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("file not found for: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("downloadFile exception occurred for: {sha256} - Error: {err}", sha256=$sha256, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("downloadFile failure for: {sha256} - Error: {err}", sha256=$sha256, err=$resp.mesg))
+    }
+    
+    return($retn)
+}
+
+
+function getFileChildren(sha256) {
+    /*
+
+        NOTE: The AL4 API being called is not consistently returning child files. It will return all direct child files,
+        but it also returns other various files in the hierarchy and it doesn't indicate at what level the file is.
+        See: https://github.com/CybercentreCanada/assemblyline/issues/65
+        
+
+        Get the children of a given file. 
+
+        Parameters:
+            sha256 (str):
+    
+        Returns:
+            list of children (list(dict)): list or $lib.null
+                {
+                    "name": "child1.txt",
+                    "sha256": "f4decd6f39856f6633eb7a1c5e362615c0f218c36306e6b3b969a7562ccbf92c"
+                },
+                {
+                    "name": "child2.txt",
+                    "sha256": "b1dc56936293c40d514d070a1390fbe29dfa3a555932617be54995630f4125a5"
+                }
+    */
+
+    if (not $sha256) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sha256",
+            ctx=({"module": $__modName, "func": "getFileChildren"}))
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/file/children/{sha256}/", host=$apiHost, sha256=$sha256)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    $resp = $lib.inet.http.get($url, headers=$headers, proxy=$__setupMod.getProxy())
+
+    $retn = $lib.null
+
+    if ($resp.code = 200) {
+        $retn = $lib.json.load($resp.body).api_response
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to get file children: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("file not found for: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("getFileChildren exception occurred for: {sha256} - Error: {err}", sha256=$sha256, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - getFileChildren failure for: {sha256}", code=$resp.code, sha256=$sha256))
+    }
+    
+    return($retn)
+}
+
+
+function getFileOntologyResults(sha256, asof="-30days") {
+    /*
+        Get the Assemblyline Ontology raw results for a given file. 
+
+        Parameters:
+            sha256 (str):
+            asof (str): Use cache from within this timeframe.
+    
+        Returns:
+            raw-ontology-results (str): Ont result per line. Each line/result is in json format.
+    */
+
+    if (not $sha256) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sha256",
+            ctx=({"module": $__modName, "func": "getFileOntologyResults"}))
+    }
+
+    $cachekey = $sha256
+    $cachepath = ("power-ups",
+        "al4",
+        "cache",
+        "file",
+        "ontology")
+
+    $cache = $lib.jsonstor.cacheget($cachepath, $cachekey, asof=$asof)
+    if $cache {
+        $__commMod.printDebug($lib.str.format("retrieved assemblyline results cache for: {ont}", ont=$sha256))
+        
+        return($cache)
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/ontology/file/{sha256}/", host=$apiHost, sha256=$sha256)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    $resp = $lib.inet.http.get($url, headers=$headers, proxy=$__setupMod.getProxy())
+    
+    $retn = $lib.null
+
+    if ($resp.code = 200) {
+        $retn = $resp.body.decode()
+        $lib.jsonstor.cacheset($cachepath, $cachekey, $retn)
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to get file ontology results for: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("file not found for: {sha256}", sha256=$sha256))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("getFileOntologyResults exception occurred for: {sha256} - Error: {err}", sha256=$sha256, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - getFileOntologyResults failure for: {sha256}", code=$resp.code, sha256=$sha256))
+    }
+    
+    return($retn)
+}
+
+
+function getSubmissionFileTree(sid, asof="-30days") {
+    /*
+        Get the file hierarchy of a given Submission ID. This is an N deep recursive process but is limited to the max
+        depth set in the Assemblyline system settings.
+        
+        Parameters:
+            sid (str): AL Submission ID
+            asof (str): Use cache from within this timeframe.
+    
+        Returns:
+            submission-file-tree (dict): dict or $lib.null
+                {                                # Dictionary of file blocks
+                    "1f...11": {                    # File sha256 (sha256)
+                    "score": 923,                 # Score for the file
+                    "name": ["file.exe",...]      # List of possible names for the file
+                    "children": {...}             # Dictionary of children file blocks
+                    }, ...
+    */
+
+    if (not $sid) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sid",
+            ctx=({"module": $__modName, "func": "getSubmissionFileTree"}))
+    }
+
+    $cachekey = $sid
+    $cachepath = ("power-ups",
+        "al4",
+        "cache",
+        "submission",
+        "tree")
+
+    $cache = $lib.jsonstor.cacheget($cachepath, $cachekey, asof=$asof)
+    if $cache {
+        $__commMod.printDebug($lib.str.format("retrieved assemblyline submission tree cache for: {sid}", sid=$sid))
+        
+        return($cache)
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/submission/tree/{sid}/", host=$apiHost, sid=$sid)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    $resp = $lib.inet.http.get($url, headers=$headers, proxy=$__setupMod.getProxy())
+
+    $retn = $lib.null
+
+    if ($resp.code = 200) {
+        $retn = $lib.json.load($resp.body).api_response
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to retrieve the submission file tree for submission id: {sid}", sid=$sid))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("submission file tree not found for: {sid}", sid=$sid))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("getSubmissionFileTree exception occurred for: {sid} - Error: {err}", sid=$sid, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - getSubmissionFileTree failure for: {sid}", code=$resp.code, sid=$sid))
+    }
+
+    return ($retn)
+}
+
+
+function getSubmissionOntologyResults(sid, asof="-30days") {
+    /*
+        Get all Assemblyline Ontology raw results for a given submission. 
+
+        Parameters:
+            sid (str): AL Submission ID
+            asof (str): Use cache from within this timeframe.
+    
+        Returns:
+            raw-ontology-results (str): Ont result per line. Each line/result is in json format.
+    */
+
+    if (not $sid) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sid",
+            ctx=({"module": $__modName, "func": "getSubmissionOntologyResults"}))
+    }
+
+    $cachekey = $sid
+    $cachepath = ("power-ups",
+        "al4",
+        "cache",
+        "submission",
+        "ontology")
+
+    $cache = $lib.jsonstor.cacheget($cachepath, $cachekey, asof=$asof)
+    if $cache {
+        $__commMod.printDebug($lib.str.format("retrieved assemblyline results cachce for: {ont}", ont=$sid))
+        
+        return($cache)
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/ontology/submission/{sid}/", host=$apiHost, sid=$sid)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    $resp = $lib.inet.http.get($url, headers=$headers, proxy=$__setupMod.getProxy())
+
+    $retn = $lib.null
+    
+    if ($resp.code = 200) {
+        $retn = $resp.body.decode()
+        $lib.jsonstor.cacheset($cachepath, $cachekey, $retn)
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to retrieve the submission ontology results for: {sid}", sid=$sid))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("submission ontology results not found for: {sid}", sid=$sid))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("getSubmissionOntologyResults exception occurred for: {sid} - Error: {err}", sid=$sid, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - getSubmissionOntologyResults failure for: {sid}", code=$resp.code, sid=$sid))
+    }
+    
+    return($retn)
+}
+
+
+function getTagPrefix() {
+    /*
+        Get the tag prefix used to annotate nodes. (wrapper)
+    
+        This is here so the caller can be a non-admin user and still get the tag prefix
+
+        Returns:
+            tag-prefix (str): default is rep.assemblyline
+    */
+    
+    return ($__setupMod.getTagPrefix())
+}
+
+
+function isSubmissionCompleted(sid) {
+    /*
+        Get the status of a given Assemblyline submission. 
+
+        Parameters:
+            sid (str): AL Submission ID
+    
+        Returns:
+            is_completed (boolean): 
+    */
+
+    if (not $sid) {
+        $__commMod.raise(BadArg,
+            msg="missing param: sid",
+            ctx=({"module": $__modName, "func": "isSubmissionCompleted"}))
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/submission/is_completed/{sid}/", host=$apiHost, sid=$sid)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    $resp = $lib.inet.http.get($url, headers=$headers, proxy=$__setupMod.getProxy())
+
+    $retn = $lib.false
+
+    if ($resp.code = 200) {
+        $retn = $lib.json.load($resp.body).api_response
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to retrieve the submission status for: {sid}", sid=$sid))
+    }
+    elif ($resp.code = 404) {
+        $__commMod.printWarning($lib.str.format("submission status not found for sid: {sid}", sid=$sid))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("isSubmissionCompleted exception occurred for: {sid} - Error: {err}", sid=$sid, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - isSubmissionCompleted failure for: {sid}", code=$resp.code, sid=$sid))
+    }
+
+    return ($retn)
+}
+
+
+function searchIndex(searchQuery, index, maxResultsPerPage=100, fields=$lib.null, sort=$lib.null, pagingId="*") {
+    /*
+        Search a specific Assemblyline 4 datastore index.
+
+        Parameters:
+            searchQuery (str): AL Search Query
+            index (str): AL Index. e.g. submission
+            maxResultsPerPage (int): Max number of results per page
+            fields (str): Comma separate list of fields to return. e.g. "id,score"
+            sort (str): How to sort the results. e.g. field asc
+            pagingId (str): ID to pass back for the next page during deep paging. A default of * is the first page.
+    
+        Returns:
+            search results (dict): AL Search API response
+                e.g.
+                   {"total": 200,                  # Total number of results found
+                    "offset": 0,                   # Offset in the result list
+                    "rows": 50,                    # Number of results returned
+                    "next_deep_paging_id": "xxx",  # ID to pass back for the next page
+                    "items": []}                   # List of results
+    */
+    
+    // Validate args
+    if (not $searchQuery) {
+        $__commMod.raise(BadArg,
+            msg="missing param: searchQuery",
+            ctx=({"module": $__modName, "func": "searchIndex"}))
+    }
+
+    if (not $index) {
+        $__commMod.raise(BadArg,
+            msg="missing param: index",
+            ctx=({"module": $__modName, "func": "searchIndex"}))
+    }
+
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+
+    $url = $lib.str.format("{host}/api/v4/search/{index}/", host=$apiHost, index=$index)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+    )
+    
+    // build search opts 
+    $opts = $lib.dict(
+        "query" = $searchQuery,
+        "deep_paging_id" = $pagingId,
+        "rows" = $maxResultsPerPage,
+        "fl" = $fields,
+        "sort" = $sort
+    )
+
+    $resp = $lib.inet.http.post($url, headers=$headers, proxy=$__setupMod.getProxy(), json=$opts)
+
+    $retn = $lib.null
+
+    if ($resp.code = 200) {
+        $retn = $lib.json.load($resp.body).api_response
+    }
+    elif ($resp.code = 400) {
+        $__commMod.printWarning("http 400 - searchIndex failure - possible malformed search query")
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to search the index: {index}", index=$index))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("searchIndex exception occurred - Error: {err}", err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - searchIndex failure", code=$resp.code))
+    }
+
+    return ($retn)
+}
+
+
+function submitFile(fnode, opts) {
+    /*
+        Submit a file to Assemblyline for analysis.
+        
+        Parameters:
+            fnode (node): a file:bytes node
+            opts (dict): Assemblyline API options for /api/v4/submit
+                e.g. 
+                {
+                    "params": {"ignore_cache": True},
+                    "metadata": {},
+                }
+    
+        Returns:
+            sid (str): Assemblyline submission ID
+    */
+        
+    $sid = $lib.null
+
+    // Validate args
+    if (not $fnode or $fnode.form() != "file:bytes") {
+        $__commMod.raise(BadArg,
+            msg="invalid arg - fnode expected file:bytes",
+            ctx=({"module": $__modName, "func": "submitFile"}))
+    }
+    
+    if (not $opts) {
+        // if not specified, just create an empty dict.
+        $opts = $lib.dict()
+    }
+
+    // Get configs
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+    
+    // verify file in axon
+    if (not $lib.bytes.has($fnode.props.get(sha256))) {
+        $__commMod.printWarning($lib.str.format("file:bytes={sha256} is not available in the axon", sha256=$fnode.props.get(sha256)))
+        
+        return ($sid)
+    }
+
+    $url = $lib.str.format("{host}/api/v4/submit/", host=$apiHost)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+        "accept"="application/json"
+    )
+    
+    $fname = $fnode.props.get(sha256)
+    if $fnode.props.get('name') {
+        $fname = $fnode.props.get('name')
+    }
+
+    $fields = $lib.list(
+        $lib.dict("name"="bin", "sha256"=$fnode.props.get(sha256), "filename"=$fname),
+        $lib.dict("name"="json", value=$opts)
+    )
+    
+    $resp = $lib.inet.http.post($url, headers=$headers, fields=$fields, proxy=$__setupMod.getProxy())
+    
+    if ($resp.code = 200) {
+        $sid = $lib.json.load($resp.body).api_response.sid
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to submit a file to Assemblyline for file: {sha256}", sha256=$fnode.props.get(sha256)))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("submitFile exception occurred for file: {sha256} - Error: {err}", sha256=$fnode.props.get(sha256), err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - submitFile failure for file: {sha256}", code=$resp.code, sha256=$fnode.props.get(sha256)))
+    }
+
+    return ($sid)
+}
+
+
+function submitURL(urlNode, opts) {
+    /*
+        Submit a URL to Assemblyline for analysis.
+        
+        Parameters:
+            url (node): inet:url node
+            opts (dict): Assemblyline API options for /api/v4/submit
+                e.g. 
+                {
+                    "params": {"ignore_cache": True},
+                    "metadata": {},
+                }
+    
+        Returns:
+            sid (str): Assemblyline submission ID
+    */
+        
+    $sid = $lib.null
+
+    // Validate args
+    if (not $urlNode or $urlNode.form() != "inet:url") {
+        $__commMod.raise(BadArg,
+            msg="invalid arg urlNode - expected inet:url",
+            ctx=({"module": $__modName, "func": "submitURL"}))
+    }
+    
+    if (not $opts) {
+        // if not specified, just create an empty dict.
+        $opts = $lib.dict()
+    }
+    $opts.url = $urlNode.value()
+
+    // Get configs
+    $apiHost = $_getAPIHost()
+    $apiCreds = $_getAPICreds()
+    
+    $url = $lib.str.format("{host}/api/v4/submit/", host=$apiHost)
+    
+    $headers = $lib.dict(
+        "x-user"=$apiCreds.user,
+        "x-apikey"=$apiCreds.key,
+        "accept"="application/json"
+    )
+    
+    $resp = $lib.inet.http.post($url, headers=$headers, json=$opts, proxy=$__setupMod.getProxy())
+    
+    if ($resp.code = 200) {
+        $sid = $lib.json.load($resp.body).api_response.sid
+    }
+    elif ($resp.code = 403) {
+        $__commMod.printWarning($lib.str.format("http 403 - user not authorized to submit a URL to Assemblyline for url: {url}", url=$url))
+    }
+    elif ($resp.code = -1) {
+        // indicates an exception occurred - e.g. name or service not known
+        $__commMod.printWarning($lib.str.format("submitURL exception occurred for url: {url} - Error: {err}", url=$url, err=$resp.err.1.mesg))
+    }
+    else {
+        // Note: this resp obj is different than the other $lib.inet.http calls since it's using $lib.axon
+        $__commMod.printWarning($lib.str.format("http {code} - submitURL failure for url: {url}", code=$resp.code, url=$url))
+    }
+    
+    return ($sid)
+}
+
+
+
+function _getAPICreds() {
+    /*
+        Get the configured API Creds. (wrapper)
+
+        This is here to raise a user-friendly message if the creds are not configured.
+        
+        Returns:
+            apicreds (dict):
+    */
+    $creds = $__setupMod.getAPICreds()
+    
+    if (not $creds) {
+        $__commMod.raise(NeedConfValu,
+            msg="The Assemblyline API creds are not configured. Run al4.setup.apicreds",
+            ctx=({"module": $__modName, "func": "_getAPICreds"}))
+    }
+    return ($creds)
+}
+
+
+function _getAPIHost() {
+    /*
+        Get the configured API Host. (wrapper)
+
+        This is here to raise a user-friendly message if the api host is not configured.
+        
+        Returns:
+            apihost (str):
+    */
+    $apiHost = $__setupMod.getAPIHost()
+
+    if (not $apiHost) {
+        $__commMod.raise(NeedConfValu,
+            msg="The Assemblyline API host is not configured. Run al4.setup.apihost",
+            ctx=({"module": $__modName, "func": "_getAPIHost"}))
+    }
+    return ($apiHost)
+}

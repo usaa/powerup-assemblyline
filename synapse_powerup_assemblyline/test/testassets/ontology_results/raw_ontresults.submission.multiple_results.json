@@ -1,0 +1,85 @@
+[
+    {
+        "odm_type": "Assemblyline Result Ontology",
+        "odm_version": "1.3",
+        "classification": "TLP:AMBER//SOCGRP",
+        "file": {
+            "md5": "26ea3e520cb396587d32a7a01aa564bd",
+            "sha1": "bc2cb97f09f70bd21225232a41af6206a62fa182",
+            "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+            "type": "executable/windows/pe64",
+            "size": 318624,
+            "names": [
+                "test.exe"
+            ]
+        },
+        "service": {
+            "name": "FooService",
+            "version": "4.4.0.0",
+            "tool_version": null
+        },
+        "results": {
+            "tags": {
+                "network.static.domain": [
+                    "foo.local"
+                ]
+            },
+            "heuristics": [],
+            "score": 3250
+        },
+        "submission": {
+            "metadata": {},
+            "date": "2023-03-30T20:54:49.817438Z",
+            "source_system": "al4.local",
+            "sid": "2T3kDaR5JukKbYPM0sBkjq",
+            "classification": "TLP:AMBER//SOCGRP",
+            "submitter": "admin",
+            "groups": [
+                "USERS"
+            ],
+            "max_score": 3250
+        }
+    },
+    {
+        "odm_type": "Assemblyline Result Ontology",
+        "odm_version": "1.3",
+        "classification": "TLP:AMBER//SOCGRP",
+        "file": {
+            "md5": "26ea3e520cb396587d32a7a01aa564bc",
+            "sha1": "bc2cb97f09f70bd21225232a41af6206a62fa18c",
+            "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb8c",
+            "type": "executable/windows/pe64",
+            "size": 100,
+            "parent": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+            "names": [
+                "child.file"
+            ]
+        },
+        "service": {
+            "name": "FooService2",
+            "version": "4.4.0.0",
+            "tool_version": null
+        },
+        "results": {
+            "tags": {
+                "network.static.uri": [
+                    "https://bar.local/"
+                ]
+            },
+            "heuristics": [],
+            "score": 3250
+        },
+        "submission": {
+            "metadata": {},
+            "date": "2023-03-30T20:54:49.817438Z",
+            "source_system": "al4.local",
+            "sid": "2T3kDaR5JukKbYPM0sBkjq",
+            "classification": "TLP:AMBER//SOCGRP",
+            "submitter": "admin",
+            "groups": [
+                "USERS"
+            ],
+            "max_score": 3250
+        }
+    }
+]

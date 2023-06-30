@@ -1,0 +1,27 @@
+{
+    "odm_type": "Assemblyline Result Ontology",
+    "odm_version": "1.3",
+    "classification": "TLP:WHITE",
+    "file": {
+        "md5": "8cc9c90598900cecb00192da74163250",
+        "sha1": "8f7e488ce09cc8e1db28e1a2a075ea59104b1978",
+        "sha256": "1a107c3ece1880cbbdc0a6c0817624b0dd033b02ebaf7fa366306aaca22c103d",
+        "type": "executable/windows/pe64",
+        "size": 401296
+    },
+    "service": {
+        "name": "FooService",
+        "version": "4.4.0.0",
+        "tool_version": null
+    },
+    "results": {
+        "tags": {},
+        "heuristics": [],
+        "score": 0
+    },
+    "submission": {
+        "date": "2023-03-30T20:45:06.870855Z",
+        "source_system": "al4.local",
+        "classification": "TLP:WHITE"
+    }
+}

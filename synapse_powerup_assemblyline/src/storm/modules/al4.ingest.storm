@@ -1,0 +1,152 @@
+/* al4.ingest
+
+    Internal functions used to ingest data into the Cortex. 
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__ontFactoryMod = $lib.import(al4.ontology)
+    $__modName = "al4.ingest"
+}
+
+
+function addAnalysisResults(ontres) {
+    /*
+        Model a single AL4 service ontology result
+
+        Parameters:
+            ontres (dict): a single ontology result dict from AL4
+        
+        Returns:
+            nodes (list(nodes)): A list of all analytically relevant nodes
+    */
+
+    $nodes = $lib.list()
+
+    // Get the appropriate parser based on the ontology "odm" version
+    $ontMod = $__ontFactoryMod.getOntologyParser($ontres.odm_version)
+
+    if $ontMod {
+
+        // Add file:bytes
+        $nodes.append($ontMod.addFile($ontres))
+
+        // add file:filepath items
+        $nodes.extend($ontMod.addFilepathFromTags($ontres))
+
+        // add inet:urlfile to create a link to the AL submission
+        // purposefully not returning this non-important node back
+        $ontMod.addALSubmissionURL($ontres)
+        
+        // add it:app:yara:match/rule items
+        $nodes.extend($ontMod.addYaraHits($ontres))
+
+        // add inet:passwd items
+        $nodes.extend($ontMod.addPasswords($ontres))
+
+        // add inet:email items
+        $nodes.extend($ontMod.addEmailAddrs($ontres))
+
+        // add inet:fqdn
+        $nodes.extend($ontMod.addStaticDomains($ontres))
+
+        // add inet:ipv4|ipv6
+        $nodes.extend($ontMod.addStaticIPs($ontres))
+
+        // add inet:url
+        $nodes.extend($ontMod.addStaticURIs($ontres))
+
+        // add inet:http:request:header
+        $nodes.extend($ontMod.addUserAgents($ontres))
+
+        // add it:host, it:exec:proc, inet:dns:request, inet:fqdn
+        $nodes.extend($ontMod.addDynamicDomains($ontres))
+
+        // add it:host, it:exec:proc, inet:flow, inet:ipv4|ipv6
+        $nodes.extend($ontMod.addDynamicIPs($ontres))
+
+        // add it:host, it:exec:proc, it:exec:url, inet:url
+        $nodes.extend($ontMod.addDynamicURIs($ontres))
+    }
+
+    return ($nodes)
+}
+
+
+function addFile(hashes, names=$lib.null, alFileType=$lib.null) {
+    /*
+        Add a file:bytes node to the cortex
+
+        Parameters:
+            hashes (dict): dict of hashes for a file: md5, sha1, sha256, sha512
+            names (list): list of file names
+            alFileType (str): AL4 file type
+        
+        Returns:
+            file:bytes (node): a file:bytes node
+    */
+
+    if (not $hashes or not $hashes.sha256) {
+        $__commMod.raise(BadArg,
+            msg="hashes parameter is missing or invalid.",
+            ctx=({"module": $__modName, "func": "addFile"}))
+    }
+
+    [ file:bytes = $hashes.sha256
+        :md5 ?= $hashes.md5
+        :sha1 ?= $hashes.sha1
+        :sha512 ?= $hashes.sha512
+        :_assemblyline:type ?= $alFileType
+        <(seen)+ { yield $__commMod.getMetaSource() }
+    ]
+
+    // Add file names as file:filepath
+    {
+        for $val in $names {
+            if $__commMod.keepFileName($val) {
+                [ file:filepath = ($hashes.sha256, $val)
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+            }
+        }
+    }
+
+    return ($node)
+}
+
+
+function addChildFile(childFileHashes, parentSha256, names=$lib.null, alFileType=$lib.null) {
+    /*
+        Add a child file to the cortex via file:bytes and file:subfile nodes
+        
+        Parameters:
+            childFileHashes (dict): dict of hashes for a file: md5, sha1, sha256, sha512
+            parentSha256 (str): sha256 of parent file
+            names (list): list of file names
+            alFileType (str): AL4 file type
+        
+        Returns:
+            file:bytes (node): a file:bytes node
+    */
+    
+    if (not $childFileHashes or not $childFileHashes.sha256) {
+        $__commMod.raise(BadArg,
+            msg="childFileHashes parameter is missing or invalid.",
+            ctx=({"module": $__modName, "func": "addChildFile"}))
+    }
+
+    if (not $parentSha256) {
+        $__commMod.raise(BadArg,
+            msg="parentSha256 parameter is missing or invalid.",
+            ctx=({"module": $__modName, "func": "addChildFile"}))
+    }
+
+    yield $addFile($childFileHashes, names=$names, alFileType=$alFileType)
+
+    {
+        [ file:subfile=($parentSha256, $node.value())
+            <(seen)+ { yield $__commMod.getMetaSource() }
+        ]
+    }
+    return($node)
+}

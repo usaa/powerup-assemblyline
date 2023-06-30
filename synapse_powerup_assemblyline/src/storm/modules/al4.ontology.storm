@@ -1,0 +1,36 @@
+/* al4.ontology
+
+    Internal functions for obtaining the proper Assemblyline ontology parser.
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__modName = "al4.ontology"
+}
+
+
+function getOntologyParser(odmVer) {
+    /*
+        Get the ontology parser module based on the ontology version.
+
+        Parameters:
+            odmVer (str): AL4 Ontology Result version
+        
+        Returns:
+            ontparser (module):
+    */
+
+    $ontMod = $lib.null
+
+    if ($odmVer and $odmVer.startswith("1.")) {
+        $ontMod = $lib.import(al4.ontology.v1x) 
+    }
+    else {
+        // If a breaking change is made to version 2x, we need to re-evaluate the modelinng
+        $__commMod.raise(NoSuchImpl,
+            msg=$lib.str.format("Assemblyline Ontology version not supported. Version={ver}", ver=$odmVer),
+            ctx=({"module": $__modName, "func": "addChildFile"}))
+    }
+
+    return ($ontMod)
+}

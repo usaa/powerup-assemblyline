@@ -1,0 +1,25 @@
+{
+    "TEST_ASSET_NOTE": "THIS IS A COMPANION FILE TO testassets/ontology_results/raw_ontresults.submission.no_results.json",
+    "api_error_message": "",
+    "api_response": {
+        "classification": "TLP:WHITE",
+        "filtered": false,
+        "partial": false,
+        "supplementary": [],
+        "tree": {
+            "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81": {
+                "children": {},
+                "name": [
+                    "test.exe"
+                ],
+                "score": 3250,
+                "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+                "size": 318624,
+                "truncated": false,
+                "type": "executable/windows/pe64"
+            }
+        }
+    },
+    "api_server_version": "4.4.0.4",
+    "api_status_code": 200
+}

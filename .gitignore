@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+
+htmlcov/
+.coverage
+.coverage.*
+
+.env
+.venv
+venv/
+
+__MACOSX
+.DS_Store

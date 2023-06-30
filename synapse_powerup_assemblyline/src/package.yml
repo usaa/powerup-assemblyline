@@ -1,0 +1,433 @@
+name: usaa-assemblyline4
+version: 1.0.0
+synapse_minversion: [2, 130, 2]
+
+# No explicit dependencies
+#depends:
+
+genopts:
+  dotstorm: true # Specify that storm command/module files end with ".storm"
+
+author:
+  url: https://www.usaa.com
+  name: USAA
+
+desc: |
+  usaa-assemblyline4 adds new Storm commands that allow you to interact with Assemblyline v4.
+
+docs:
+  - title: User Guide
+    path: docs/user_guide.md
+  - title: Admin Guide
+    path: docs/admin_guide.md
+  - title: Package Documentation
+    path: docs/package_documentation.md
+  - title: Change Log
+    path: docs/CHANGELOG_COPY.rst
+
+onload: $lib.import(al4.setup).onload()
+
+perms:
+  - desc: Permissions needed to use the Assemblyline Power-up commands.
+    gate: cortex
+    perm:
+      - power-ups
+      - al4
+      - user
+  - desc: Permissions needed to manage configurations for the Assemblyline Power-up.
+    gate: cortex
+    perm:
+      - power-ups
+      - al4
+      - admin
+
+modules:
+  - name: al4
+  - name: al4.common
+    modconf:
+      source: be0d2eac8fdcbc2828a4e8fb375560a6
+  - name: al4.ingest
+  - name: al4.ontology
+  - name: al4.ontology.v1x
+  - name: al4.privsep
+    asroot:perms:
+      - - power-ups
+        - al4
+        - user
+  - name: al4.setup
+    modconf:
+      extendedmodelprops:
+        - formname: "file:bytes"
+          basetype: "_assemblyline:type"
+          typeopts:
+            - str
+            - lower: true
+              strip: true
+          typeinfo:
+            doc: Type of file as identified by Assemblyline
+
+  - name: al4.setup.user
+  - name: al4.setup.admin
+    asroot:perms:
+      - - power-ups
+        - al4
+        - admin
+
+commands:
+  - name: al4.file.download
+    descr: |
+      Download a file from Assemblyline.
+
+      This command takes a file:bytes or hash:sha256 node as input and downloads the corresponding file from
+      Assemblyline into the axon.
+
+      Examples:
+
+          // Download a file into the axon
+          file:bytes=5e52777a11d9b4728ae499a3437abaa8b3acefa1699f2928a4f02aa3e8f213e3 | al4.file.download
+
+          // Download a file from a hash:sha256 node and pivot to file:bytes node
+          hash:sha256=5e52777a11d9b4728ae499a3437abaa8b3acefa1699f2928a4f02aa3e8f213e3 | al4.file.download | -> file:bytes
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - --debug
+        - default: false
+          action: store_true
+          help: Show verbose debug output.
+      - - --yield
+        - default: false
+          action: store_true
+          help: Yield the newly created nodes.
+    cmdinputs:
+      - form: file:bytes
+      - form: hash:sha256
+
+  - name: al4.file.enrich
+    descr: |
+      Enrich the specified file with all the latest analytic service results from Assemblyline 4.
+
+      Examples:
+
+          // Enrich the specified file
+          file:bytes=5e52777a11d9b4728ae499a3437abaa8b3acefa1699f2928a4f02aa3e8f213e3 | al4.file.enrich
+
+          // Enrich the specified file and yield the resulting nodes
+          hash:sha256=5e52777a11d9b4728ae499a3437abaa8b3acefa1699f2928a4f02aa3e8f213e3 | al4.file.enrich --yield
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - --debug
+        - default: false
+          action: store_true
+          help: Show verbose debug output.
+      - - --yield
+        - default: false
+          action: store_true
+          help: Yield the newly created nodes.
+      - - --asof
+        - default: "-30days"
+          type: time
+          help: Specify the maximum age for a cached result. To disable caching, use --asof now.
+    cmdinputs:
+      - form: file:bytes
+      - form: hash:sha256
+
+  - name: al4.file.submit
+    descr: |
+      Submit the specified file to Assemblyline for analysis and wait for the results.
+
+      The file must be present in the axon.
+
+      The AL submission parameters used are based on the associated Assemblyline account.
+
+      Examples:
+
+          // Submit files tagged with #mal to Assemblyline for analysis
+          file:bytes#mal | al4.file.submit
+
+          // Use the --force flag to ignore the Assemblyline analysis results cache and force a re-analysis of the file
+          file:bytes#mal | al4.file.submit --force
+
+          // Do not wait for the analysis to complete
+          file:bytes#mal | al4.file.submit --nowait
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - --debug
+        - default: false
+          action: store_true
+          help: Show verbose debug output.
+      - - --yield
+        - default: false
+          action: store_true
+          help: Yield the newly created nodes.
+      - - --force
+        - default: false
+          action: store_true
+          help: Ignore Assemblyline results cache and force a re-scan.
+      - - --nowait
+        - default: false
+          action: store_true
+          help: Do not wait for analysis results.
+
+    cmdinputs:
+      - form: file:bytes
+        help: Any file:bytes present in the axon.
+
+  - name: al4.setup.apicreds
+    descr: |
+      Set the Assemblyline API user and key.
+
+      Permissions: 
+        Must be a member of power-ups.al4.user to set for current user.
+        Requires power-ups.al4.admin and .user for setting API creds for all users.
+
+      Examples:
+          // Set for all users
+          al4.setup.apicreds <apiuser> <apikey>
+
+          // Set for yourself only
+          al4.setup.apicreds --self <apiuser> <apikey>
+    asroot: false
+    perms:
+      # the .user perm is used instead of .admin since there is a --self option
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - apiuser
+        - default: true
+          action: store_true
+          nargs: "?"
+          help: Assemblyline API User
+      - - apikey
+        - default: true
+          action: store_true
+          nargs: "?"
+          help: Assemblyline API Key
+      - - --self
+        - default: false
+          action: store_true
+          help: Set the key as a user variable. If not used, it will be set globally.
+      - - --show-scope
+        - default: false
+          action: store_true
+          help: Show the currently configured API key's scope.
+          type: bool
+      - - --show-creds
+        - default: false
+          action: store_true
+          help: Show the currently configured API creds.
+          type: bool
+      - - --remove
+        - default: false
+          action: store_true
+          help: Remove the currently configured API creds.
+          type: bool
+
+  - name: al4.setup.apihost
+    descr: |
+      Set the Assemblyline API host endpoint.
+
+      Permissions: Requires power-ups.al4.admin.
+
+      Examples:
+
+          // Set for all users
+          al4.setup.apihost https://al.local:443
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - admin
+    cmdargs:
+      - - apihost
+        - default: true
+          action: store_true
+          nargs: "?"
+          help: Assemblyline API Host Endpoint
+      - - --show
+        - default: false
+          action: store_true
+          help: Show the currently configured API Host.
+          type: bool
+
+  - name: al4.setup.proxy
+    descr: |
+      Manage where the Assemblyline Power-Up proxies http traffic to.
+
+      Permissions: Requires power-ups.al4.admin.
+
+      Examples:
+
+        // Set a new proxy URL that only affects the Assemblyline Power-Up
+        al4.setup.proxy socks5://yourproxyhost:8888
+
+        // Remove the configured Assemblyline proxy and accept the system default proxy
+        al4.setup.proxy --remove
+
+        // Disable the use of any proxy, including the use of any proxies configured in the Cortex
+        al4.setup.proxy --disable
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - admin
+    cmdargs:
+      - - proxy
+        - default: true
+          action: store_true
+          nargs: "?"
+          help: A URL to proxy requests to.
+      - - --show-proxy
+        - default: false
+          action: store_true
+          help: Show the currently configured proxy value.
+          type: bool
+      - - --disable
+        - default: false
+          action: store_true
+          help: Disable the use of any proxy, including the use of any proxies configured in the Cortex.
+          type: bool
+      - - --remove
+        - default: false
+          action: store_true
+          help: Reset the configured proxy and accept the system default proxy.
+          type: bool
+
+  - name: al4.setup.tagprefix
+    descr: |
+      Set the tag prefix when recording Assemblyline tags.
+
+      If not specified, the default tag prefix is: rep.assemblyline
+
+      Any characters in the Assemblyline tag values incompatible with Synapse tag names are replaced with "_".
+
+      Permissions: Requires power-ups.al4.admin.
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - admin
+    cmdargs:
+      - - tag
+        - default: true
+          action: store_true
+          nargs: "?"
+          help: The tag prefix to use.
+      - - --show
+        - default: false
+          action: store_true
+          help: Show the currently configured tag prefix.
+          type: bool
+
+  - name: al4.submission.enrich
+    descr: |
+      Retrieve the analysis results for a given Assemblyline submission and enrich the corresponding nodes.
+
+      Examples:
+
+          // Retrieve the Assemblyline analysis results for a given submission
+          al4.submission.enrich 44A8cH7F03NSF6qqOWOktq
+
+          // Retrieve the Assemblyline analysis results for a given submission ignoring any local Synapse cache
+          al4.submission.enrich 44A8cH7F03NSF6qqOWOktq --asof now
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - --debug
+        - default: false
+          action: store_true
+          help: Show verbose debug output.
+      - - --yield
+        - default: false
+          action: store_true
+          help: Yield the newly created nodes.
+      - - --asof
+        - default: "-30days"
+          type: time
+          help: Specify the maximum age for a cached result. To disable caching, use --asof now.
+      - - submission_id
+        - action: store_true
+          help: The Assemblyline submission id to model analysis results from.
+
+  - name: al4.url.submit
+    descr: |
+      Submit the specified URL to Assemblyline for analysis and wait for the results.
+
+      The AL submission parameters used are based on the associated Assemblyline account.
+
+      Examples:
+
+          // Submit URLs tagged with #mal to Assemblyline for analysis
+          inet:url#mal | al4.url.submit
+
+          // Use the --force flag to ignore the Assemblyline analysis results cache and force a re-analysis of the URL
+          inet:url#mal | al4.url.submit --force
+    asroot: false
+    perms:
+      - - power-ups
+        - al4
+        - user
+    cmdargs:
+      - - --debug
+        - default: false
+          action: store_true
+          help: Show verbose debug output.
+      - - --yield
+        - default: false
+          action: store_true
+          help: Yield the newly created nodes.
+      - - --download
+        - default: false
+          action: store_true
+          help: Download the file associated to the URL submission. This will not execute if the --nowait option is used.
+      - - --force
+        - default: false
+          action: store_true
+          help: Ignore Assemblyline results cache and force a re-scan.
+      - - --nowait
+        - default: false
+          action: store_true
+          help: Do not wait for analysis results.
+    cmdinputs:
+      - form: inet:url
+        help: Any inet:url node.
+
+optic:
+  actions:
+    - descr: Download a file from Assemblyline.
+      forms:
+        - file:bytes
+        - hash:sha256
+      name: al4.file.download
+      storm: al4.file.download
+    - descr: Enrich the specified file with all the latest analytic service results from Assemblyline 4.
+      forms:
+        - file:bytes
+        - hash:sha256
+      name: al4.file.enrich
+      storm: al4.file.enrich
+    - descr: Submit the specified file to Assemblyline for analysis and wait for the results.
+      forms:
+        - file:bytes
+      name: al4.file.submit
+      storm: al4.file.submit
+    - descr: Submit the specified URL to Assemblyline for analysis and wait for the results.
+      forms:
+        - inet:url
+      name: al4.url.submit
+      storm: al4.url.submit

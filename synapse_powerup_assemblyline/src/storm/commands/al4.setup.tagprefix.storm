@@ -1,0 +1,26 @@
+init {
+    $setupAdminMod = $lib.import(al4.setup.admin)
+    $commMod = $lib.import(al4.common)
+}
+
+
+if $cmdopts.tag {
+    $lib.print("Setting Assemblyline Power-Up tag prefix for all users.")
+    $setupAdminMod.setGlobalTagPrefix($cmdopts.tag)
+}
+else {
+    if $cmdopts.show {   
+        $tagprefix = $setupAdminMod.getGlobalTagPrefix()
+        if $tagprefix {
+            $lib.print("A custom tag prefix is in use: {pfx}", pfx=$tagprefix)
+        }
+        else {
+            $lib.print("The default tag prefix is in use: {pfx}", pfx=$commMod.defaultTagPrefix)
+        }
+        
+    }
+    else {
+        al4.setup.tagprefix --help
+    }
+}
+

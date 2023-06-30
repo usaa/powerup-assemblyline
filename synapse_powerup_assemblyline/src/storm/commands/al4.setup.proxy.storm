@@ -1,0 +1,34 @@
+init {
+    $setupAdminMod = $lib.import(al4.setup.admin)
+}
+
+
+if $cmdopts.proxy {
+    $lib.print("Setting proxy for the Assemblyline Power-Up for all users.")
+    $setupAdminMod.setGlobalProxy($cmdopts.proxy)
+}
+else {
+    if $cmdopts.show_proxy {
+        
+        $al4Proxy = $setupAdminMod.getGlobalProxy()
+        
+        if ($al4Proxy = $lib.false) {
+            $al4Proxy = "<Configured to not use a proxy>"
+        }
+        elif ($al4Proxy = $lib.null) {
+            $al4Proxy = "<Using Cortex configured proxy>"
+        }
+        $lib.print("Assemblyline Power-Up Proxy: {proxy}", proxy=$al4Proxy)
+    }
+    elif $cmdopts.disable {
+        $lib.print("Disabling proxy for the Assemblyline Power-Up.")
+        $setupAdminMod.setGlobalProxy("<disabled>")
+    }
+    elif $cmdopts.remove {
+        $lib.print("Removing the Assemblyline Power-Up configured proxy.")
+        $setupAdminMod.deleteGlobalProxy()
+    }
+    else {
+        al4.setup.proxy --help
+    }
+}

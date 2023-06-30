@@ -1,0 +1,6 @@
+init {
+    if $cmdopts.debug { $lib.debug = $lib.true }
+    $alMod = $lib.import(al4)
+}
+
+divert $cmdopts.yield $alMod.submitURL($node, waitForAnalysis=(not $cmdopts.nowait), forceRescan=$cmdopts.force, download=$cmdopts.download)

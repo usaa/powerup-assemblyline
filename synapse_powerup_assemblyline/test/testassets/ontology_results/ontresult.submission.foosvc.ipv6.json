@@ -1,0 +1,45 @@
+{
+    "odm_type": "Assemblyline Result Ontology",
+    "odm_version": "1.3",
+    "classification": "TLP:AMBER//SOCGRP",
+    "file": {
+        "md5": "26ea3e520cb396587d32a7a01aa564bd",
+        "sha1": "bc2cb97f09f70bd21225232a41af6206a62fa182",
+        "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+        "type": "executable/windows/pe64",
+        "size": 318624,
+        "names": [
+            "pskill64.exe"
+        ]
+    },
+    "service": {
+        "name": "FooService",
+        "version": "4.4.0.0",
+        "tool_version": null
+    },
+    "results": {
+        "tags": {
+            "network.static.ip": [
+                "2001:0db8:85a3:0000:0000:8a2e:0370:7332",
+                "2001:0db8:85a3:0000:0000:8a2e:0370:7333"
+            ],
+            "network.dynamic.ip": [
+                "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+            ]
+        },
+        "heuristics": [],
+        "score": 3250
+    },
+    "submission": {
+        "metadata": {},
+        "date": "2023-03-24T15:35:33.326844Z",
+        "source_system": "al4.local",
+        "sid": "2T3kDaR5JukKbYPM0sBkjq",
+        "classification": "TLP:AMBER//SOCGRP",
+        "submitter": "admin",
+        "groups": [
+            "USERS"
+        ],
+        "max_score": 3250
+    }
+}

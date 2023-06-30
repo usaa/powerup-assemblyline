@@ -1,0 +1,139 @@
+{
+    "odm_type": "Assemblyline Result Ontology",
+    "odm_version": "1.3",
+    "classification": "TLP:AMBER//SOCGRP",
+    "file": {
+        "md5": "26ea3e520cb396587d32a7a01aa564bd",
+        "sha1": "bc2cb97f09f70bd21225232a41af6206a62fa182",
+        "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+        "type": "executable/windows/pe64",
+        "size": 318624,
+        "names": [
+            "pskill64.exe",
+            "pskill.exe",
+            "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+            "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81.vir",
+            "26ea3e520cb396587d32a7a01aa564bd.sample"
+        ]
+    },
+    "service": {
+        "name": "FooService",
+        "version": "4.4.0.0",
+        "tool_version": null
+    },
+    "results": {
+        "tags": {
+            "attribution.actor": [
+                "actorx",
+                "actory"
+            ],
+            "attribution.campaign": [
+                "campaigna",
+                "campaignb"
+            ],
+            "attribution.exploit": [
+                "exploita",
+                "exploitb"
+            ],
+            "attribution.family": [
+                "familya",
+                "familyb"
+            ],
+            "attribution.implant": [
+                "implanta",
+                "implantb"
+            ],
+            "attribution.network": [
+                "networka",
+                "networkb"
+            ],
+            "info.password": [
+                "infected"
+            ],
+            "file.path": [
+                "pskill64.exe",
+                "pskill.exe"
+            ],
+            "file.rule.yara": [
+                "src1.Archive_in_LNK",
+                "src2.Long_RelativePath"
+            ],
+            "network.email.address": [
+                "noreply@foo.local",
+                "noreply@bar.local"
+            ],
+            "network.dynamic.domain": [
+                "ncsi.4-c-0003.c-msedge.net",
+                "time.windows.com"
+            ],
+            "network.static.domain": [
+                "ncsi.4-c-0004.c-msedge.net",
+                "time2.windows.com"
+            ],
+            "network.static.ip": [
+                "8.8.8.8",
+                "1.1.1.1"
+            ],
+            "network.static.uri": [
+                "http://foo.local?id=123",
+                "https://bar.local/"
+            ],
+            "network.dynamic.ip": [
+                "13.107.4.52",
+                "8.8.8.8"
+            ],
+            "network.dynamic.uri": [
+                "http://go.microsoft.com/fwlink/?LinkID=123",
+                "https://testme.local/?f=123"
+            ],
+            "network.user_agent": [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
+                "foo-agent"
+            ],
+            "technique.comms_routine": [
+                "comms-routine-a"
+            ],
+            "technique.config": [
+                "configa"
+            ],
+            "technique.crypto": [
+                "cryptoa"
+            ],
+            "technique.keylogger": [
+                "keyloggera"
+            ],
+            "technique.macro": [
+                "Contains VBA Macro(s)"
+            ],
+            "technique.masking_algo": [
+                "maska"
+            ],
+            "technique.obfuscation": [
+                "VBA Macro String Functions"
+            ],
+            "technique.packer": [
+                "UPX"
+            ],
+            "technique.persistence": [
+                "persa"
+            ],
+            "technique.shellcode": [
+                "shellcodea"
+            ]
+        },
+        "heuristics": [],
+        "score": 3250
+    },
+    "submission": {
+        "metadata": {},
+        "date": "2023-03-30T20:54:49.817438Z",
+        "source_system": "al4.local",
+        "sid": "2T3kDaR5JukKbYPM0sBkjq",
+        "classification": "TLP:AMBER//SOCGRP",
+        "submitter": "admin",
+        "groups": [
+            "USERS"
+        ],
+        "max_score": 3250
+    }
+}

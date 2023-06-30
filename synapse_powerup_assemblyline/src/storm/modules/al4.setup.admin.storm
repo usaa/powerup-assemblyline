@@ -1,0 +1,241 @@
+/* al4.setup.admin
+
+    Internal functions which are meant to get and set global configurations for all users of this Power-Up.
+    
+    Permissions: requires the user to be a member of power-ups.al4.admin
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__modName = "al4.setup.admin"
+}
+
+
+function getGlobalAPICreds() {
+    /*
+        Get the global API Creds. 
+        
+        This is here to support the al4.setup.apicreds storm command --show-creds arg.
+        
+        Given the defined permissions model, when imported directly, the al4.setup module's getApiCreds() will raise an
+        AuthDeny error when the user is not a Synapse admin. This module allows for users in the power-ups.al4.admin
+        group to import this module as it gives them asroot perms.
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            apicreds (dict): e.g. {"user": x, "key": x, "scope": "global"} or $lib.null if not set
+    */
+
+    return ($lib.globals.get($__commMod.apiCredsVar))
+}
+
+
+function setGlobalAPICreds(apiUser, apiKey) {
+    /*
+        Set the global API Creds for all users.
+        
+        Parameters:
+            apiUser (str):
+            apiKey (str):
+
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+
+    if (not $apiUser) {
+        $__commMod.raise(BadArg,
+            msg="missing param: apiUser",
+            ctx=({"module": $__modName, "func": "setGlobalAPICreds"}))
+    }
+    if (not $apiKey) {
+        $__commMod.raise(BadArg,
+            msg="missing param: apiKey",
+            ctx=({"module": $__modName, "func": "setGlobalAPICreds"}))
+    }
+
+    $creds = $lib.dict()
+    $creds.user = $apiUser
+    $creds.key = $apiKey
+    
+    $creds.scope = "global"
+    $lib.globals.set($__commMod.apiCredsVar, $creds)
+    
+    return ($lib.null)
+}
+
+
+function removeGlobalAPICreds() {
+    /*
+        Remove the API Creds set at the global scope.
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+    
+    $lib.globals.set($__commMod.apiCredsVar, $lib.null)
+    
+    return ($lib.null)
+}
+
+
+function getGlobalAPIHost() {
+    /*
+        Get the global API Host. 
+        
+        This is here to support the al4.setup.apihost storm command --show arg.
+        
+        Given the defined permissions model, when imported directly, the al4.setup module's getApiHost() will raise an
+        AuthDeny error when the user is not a Synapse admin. This module allows for users in the power-ups.al4.admin
+        group to import this module as it gives them asroot perms.
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            apihost (str): e.g. "https://al4.local" or $lib.null if not set
+    */
+
+    return($lib.globals.get($__commMod.apiHostVar))
+}
+
+
+function setGlobalAPIHost(apiHost) {
+    /*
+        Set the global API Host for all users.
+
+        Parameters:
+            apiHost (str):
+
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+
+    if (not $apiHost) {
+        $__commMod.raise(BadArg,
+            msg="missing param: apiHost",
+            ctx=({"module": $__modName, "func": "setGlobalAPIHost"}))
+    }
+
+    $lib.globals.set($__commMod.apiHostVar, $apiHost)
+    return ($lib.null)
+}
+
+
+function getGlobalProxy() {
+    /*
+        Get the global Proxy scoped to the Assemblyline Power-Up.
+        
+        This is here to support the al4.setup.apihost storm command --show-proxy arg.
+        
+        Given the defined permissions model, when imported directly, the al4.setup module's getProxy() will raise an
+        AuthDeny error when the user is not a Synapse admin. This module allows for users in the power-ups.al4.admin
+        group to import this module as it gives them asroot perms.
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            api proxy (str): e.g. "http://yourproxy:8080" or $lib.null if not set
+    */
+    
+    return ($lib.globals.get($__commMod.proxyVar))
+}
+
+
+function setGlobalProxy(proxy) {
+    /*
+        Set the global Proxy scoped to the Assemblyline Power-Up.
+
+        Parameters:
+            proxy (str): if "<disabled>", this indicates the power-up should not use a proxy at all.
+
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+
+    if (not $proxy) {
+        $__commMod.raise(BadArg,
+            msg="missing param: proxy",
+            ctx=({"module": $__modName, "func": "setGlobalProxy"}))
+    }
+
+    // Set the val to $lib.false to indicate the proxy should be disabled
+    if ($proxy = "<disabled>") {
+        $proxy = $lib.false
+    }
+    $lib.globals.set($__commMod.proxyVar, $proxy)
+    return ($lib.null)
+}
+
+
+function deleteGlobalProxy() {
+    /*
+        Remove the Proxy set at for the Assemblyline Power-Up
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+
+    $lib.globals.pop($__commMod.proxyVar, $lib.null)
+    return ($lib.null)
+}
+
+
+function getGlobalTagPrefix() {
+    /*
+        Get the global tag prefix set for the Assemblyline Power-Up.
+        
+        This is here to support the al4.setup.tagprefix storm command --show arg.
+        
+        Given the defined permissions model, when imported directly, the al4.setup module's getTagPrefix() will raise an
+        AuthDeny error when the user is not a Synapse admin. This module allows for users in the power-ups.al4.admin
+        group to import this module as it gives them asroot perms.
+        
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            tag prefix (str): e.g. "rep.al4" or $lib.null if not set
+    */
+    
+    return ($lib.globals.get($__commMod.tagPrefixVar))
+}
+
+
+function setGlobalTagPrefix(tagPrefix) {
+    /*
+        Override the default tag prefix for all Assemblyline Power-Up results that are tagged.
+
+        Permissions:
+            Privileged - requires power-ups.al4.admin
+
+        Returns:
+            null
+    */
+
+    if (not $tagPrefix) {
+        $__commMod.raise(BadArg,
+            msg="missing param: tagPrefix",
+            ctx=({"module": $__modName, "func": "setGlobalTagPrefix"}))
+    }
+
+    $lib.globals.set($__commMod.tagPrefixVar, $tagPrefix)
+    return ($lib.null)
+}

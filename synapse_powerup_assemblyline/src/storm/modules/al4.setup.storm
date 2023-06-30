@@ -1,0 +1,130 @@
+/* al4.setup
+
+    Internal functions which are meant to be used by the other module code that needs access to various Power-Up
+    configurations.
+
+    Storm commands that need to set these related variables should so so through the `al4.setup.user` and
+    `al4.setup.admin` modules.
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__modName = "al4.setup"
+}
+
+
+function getAPICreds() {
+    /*
+        Get the configured API Creds. 
+        
+        It will get the self API creds if defined or fall back to the globally configured creds.
+
+        This is meant to be used by code that needs to access the currently configured key.
+        i.e. Access this through the al4.privsep module.
+        It is not meant to be used by the corresponding setup command. Use the setup.user|admin module for that.
+
+        Permissions:
+            Privileged - requires asroot perms
+
+        Returns:
+            apicreds (dict): e.g. {"user": x, "key": x, "scope": "current-user|global"}
+    */
+
+    $apiCreds = $lib.user.vars.get($__commMod.apiCredsVar)
+    if $apiCreds {
+        return($apiCreds)
+    }
+
+    $apiCreds = $lib.globals.get($__commMod.apiCredsVar)
+    if $apiCreds {
+        return($apiCreds)
+    }
+
+    return($lib.null)
+}
+
+
+function getAPIHost() {
+    /*
+        Get the configured API Host. 
+        
+        This is meant to be used by code that needs to access the currently configured API host.
+        i.e. Access this through the al4.privsep module.
+        It is not meant to be used by the corresponding setup command. Use the setup.admin module for that.
+
+        Permissions:
+            Privileged - requires asroot perms
+
+        Returns:
+            apihost (str): e.g. https://al4.local
+    */
+
+    return($lib.globals.get($__commMod.apiHostVar))
+}
+
+
+function getProxy() {
+    /*
+        Get the configured Proxy for the Assemblyline Power-Up. (Scoped to this power-up only) 
+        
+        This is meant to be used by code that needs to access the currently configured API host.
+        i.e. Access this through the al4.privsep module.
+        It is not meant to be used by the corresponding setup command. Use the setup.admin module for that.
+
+        Permissions:
+            Privileged - requires asroot perms
+
+        Returns:
+            proxy (str): e.g. "http://yourproxy:8080" or 
+                $lib.false to indicate the proxy should be disabled or 
+                $lib.null to indicate no proxy has been set and to default to the cortex configured proxy
+    */
+    
+    return ($lib.globals.get($__commMod.proxyVar, $lib.null))
+}
+
+
+function getTagPrefix() {
+    /*
+        Get the configured tag prefix.
+        
+        This is meant to be used by code that needs to access the currently configured API host.
+        i.e. Access this through the al4.privsep module.
+        It is not meant to be used by the corresponding setup command. Use the setup.admin module for that.
+
+        Permissions:
+            Privileged - requires asroot perms
+
+        Returns:
+            tag prefix (str): e.g. rep.assemblyline
+    */
+
+    $tagPrefix = $lib.globals.get($__commMod.tagPrefixVar)
+    if $tagPrefix {
+        return($tagPrefix)
+    }
+    else {
+        return($__commMod.defaultTagPrefix)
+    }
+    return ($lib.null)
+}
+
+
+function onload() {
+    /*
+        Run package onload configurations.
+    */
+
+    // Setup extended model properties
+
+    for $prop in $modconf.extendedmodelprops {
+
+        $fullPropName = $lib.str.format("{form}:{basetype}", form=$prop.formname, basetype=$prop.basetype)
+        
+        if (not $lib.model.prop($fullPropName)) {
+            $lib.model.ext.addFormProp($prop.formname, $prop.basetype, $prop.typeopts, $prop.typeinfo)
+        }
+    }
+
+    return($lib.null)
+}

@@ -1,0 +1,93 @@
+{
+    "api_error_message": "",
+    "api_response": {
+        "classification": "TLP:WHITE",
+        "filtered": false,
+        "partial": false,
+        "supplementary": [],
+        "tree": {
+            "4788ad19357d68b49d0433c806d1b7fd9c990d536716522c122f8b0fdcaad664": {
+                "children": {
+                    "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81": {
+                        "children": {
+                            "7619d0f290811c0f147191b77e33d237a47ea312719d10f77ebd5efd2483677e": {
+                                "children": {},
+                                "name": [
+                                    "overlay"
+                                ],
+                                "score": 0,
+                                "sha256": "7619d0f290811c0f147191b77e33d237a47ea312719d10f77ebd5efd2483677e",
+                                "size": 16032,
+                                "truncated": false,
+                                "type": "certificate/rsa"
+                            },
+                            "b75f8852bd62c925fe0a257606d93b24049a71ee8bc1e9d5e08ea717b8125298": {
+                                "children": {},
+                                "name": [
+                                    "CERTIFICATE",
+                                    "overlay"
+                                ],
+                                "score": 0,
+                                "sha256": "b75f8852bd62c925fe0a257606d93b24049a71ee8bc1e9d5e08ea717b8125298",
+                                "size": 16040,
+                                "truncated": false,
+                                "type": "certificate/rsa"
+                            },
+                            "d0cb028a6e95a6b7644ab24df0a2b66d6d40a0dc66cb241e308a44f6b9fe32ac": {
+                                "children": {},
+                                "name": [
+                                    ".data"
+                                ],
+                                "score": 0,
+                                "sha256": "d0cb028a6e95a6b7644ab24df0a2b66d6d40a0dc66cb241e308a44f6b9fe32ac",
+                                "size": 6656,
+                                "truncated": false,
+                                "type": "unknown"
+                            },
+                            "d38a8b061a0c3bbd9c3bd66c664ff9fa10d3f74983c59134b2534f2a283998c2": {
+                                "children": {},
+                                "name": [
+                                    "binary_0_2147483880_2147483894_1033"
+                                ],
+                                "score": 0,
+                                "sha256": "d38a8b061a0c3bbd9c3bd66c664ff9fa10d3f74983c59134b2534f2a283998c2",
+                                "size": 136360,
+                                "truncated": true,
+                                "type": "executable/windows/pe64"
+                            }
+                        },
+                        "name": [
+                            "pskill64.exe"
+                        ],
+                        "score": 200,
+                        "sha256": "75899c5ace600406503a937ef550ab0bbd0f6e0188b9e93e206beb1dfc79bb81",
+                        "size": 318624,
+                        "truncated": false,
+                        "type": "executable/windows/pe64"
+                    },
+                    "b8bda64293e33551cc8d77559abe23bbb24e84a29892866287c1c04b0301cd6e": {
+                        "children": {},
+                        "name": [
+                            "__MACOSX/._pskill64.exe"
+                        ],
+                        "score": 0,
+                        "sha256": "b8bda64293e33551cc8d77559abe23bbb24e84a29892866287c1c04b0301cd6e",
+                        "size": 312,
+                        "truncated": false,
+                        "type": "unknown"
+                    }
+                },
+                "name": [
+                    "pskill64.exe.zip"
+                ],
+                "score": 500,
+                "sha256": "4788ad19357d68b49d0433c806d1b7fd9c990d536716522c122f8b0fdcaad664",
+                "size": 145942,
+                "truncated": false,
+                "type": "archive/zip"
+            }
+        }
+    },
+    "api_server_version": "4.4.0.4",
+    "api_status_code": 200
+}

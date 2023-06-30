@@ -1,0 +1,3 @@
+synapse>=2.130.2
+pytest-asyncio
+pytest

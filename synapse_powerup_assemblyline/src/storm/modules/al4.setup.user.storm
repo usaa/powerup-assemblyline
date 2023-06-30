@@ -1,0 +1,79 @@
+/* al4.setup.user
+
+    Internal functions which are used to set user specific configurations of this Power-Up. 
+    e.g. Setup commands that have a --self option. 
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__modName = "al4.setup.user"
+}
+
+
+function getUserAPICreds() {
+    /*
+        Get the API Creds configured for the current user. 
+        
+        This is here to support the al4.setup.apicreds storm command --show-creds arg.
+        
+        Given the defined permissions model, when imported directly, the al4.setup module's getApiCreds() will raise an
+        AuthDeny error when the user is not a Synapse admin. This module allows for any user to import this module as
+        no asroot permissions are needed.
+        
+        Permissions:
+            None needed
+
+        Returns:
+            apicreds (dict): e.g. {"user": x, "key": x, "scope": "current-user"} or $lib.null if not set
+    */
+    return ($lib.user.vars.get($__commMod.apiCredsVar))
+}
+
+
+function setUserAPICreds(apiUser, apiKey) {
+    /*
+        Set the current user's API Creds. Global creds are configured in the al4.setup.admin module
+        
+        Permissions:
+            None needed
+
+        Returns:
+            null
+    */
+
+    if (not $apiUser) {
+        $__commMod.raise(BadArg,
+            msg="missing param: apiUser",
+            ctx=({"module": $__modName, "func": "setUserAPICreds"}))
+    }
+    if (not $apiKey) {
+        $__commMod.raise(BadArg,
+            msg="missing param: apiKey",
+            ctx=({"module": $__modName, "func": "setUserAPICreds"}))
+    }
+
+    $creds = $lib.dict()
+    $creds.user = $apiUser
+    $creds.key = $apiKey
+    
+    $creds.scope = "current-user"
+    $lib.user.vars.set($__commMod.apiCredsVar, $creds)
+    
+    return ($lib.null)
+}
+
+function removeUserAPICreds() {
+    /*
+        Remove the API Creds set for the current user. 
+        
+        Permissions:
+            None needed
+
+        Returns:
+            null
+    */
+
+    $lib.user.vars.set($__commMod.apiCredsVar, $lib.null)
+    
+    return ($lib.null)
+}

@@ -1,0 +1,795 @@
+/* al4.ontology.v1x
+
+    Internal functions implementing the Assemblyline ontology parser for version 1.x ontologies.
+
+    Ref for AL4 ResultOntology: https://cybercentrecanada.github.io/assemblyline4_docs/odm/models/ontology/ontology/
+*/
+
+init {
+    $ontParserVer = "v1x"
+    $__commMod = $lib.import(al4.common)
+    $__privsepMod = $lib.import(al4.privsep)
+    $__modName = "al4.ontology.v1x"
+}
+
+
+function addALSubmissionURL(ontres) {
+    /*
+        Add the related Assemblyline submission URL to the root file of a submission.
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:urlfile (node): Return a node if applicable
+    */
+
+    // only create this linkage to the root file in the submission; and only when a submission id is present
+    if (not $ontres.file.parent and $ontres.submission.sid) {
+
+        $url = $lib.str.format("https://{host}/submission/{sid}", host=$ontres.submission.source_system, sid=$ontres.submission.sid)
+        [ inet:urlfile=($url, $ontres.file.sha256)
+            <(seen)+ { yield $__commMod.getMetaSource() }
+        ]
+
+        return ($node)
+    }
+
+    return ($lib.null)
+}
+
+
+function addDynamicDomains(ontres) {
+    /*
+        Add a set of nodes when a network.dynamic.domain tag is found.
+
+        This adds the following nodes: it:host, it:exec:proc, inet:fqdn, inet:dns:request
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:dns:request (list(node)): Return a list of nodes or empty list.
+    */
+    
+    $nodes = $lib.list()
+
+    if $ontres.results.tags."network.dynamic.domain" {
+        
+        $host = $_addHost($ontres)
+
+        for $val in $ontres.results.tags."network.dynamic.domain" {
+        
+            ($ok, $valu) = $lib.trycast("inet:fqdn", $val)
+
+            if $ok {
+
+                $proc = $_addExecProc($host, $ontres.file.sha256)
+
+                [ inet:dns:request = $lib.guid("assemblyline4", $ontres.file.sha256, $val)
+                    :host = $host
+                    :proc = $proc
+                    :sandbox:file = $ontres.file.sha256
+                    :query:name = $val
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+
+                {
+                    [ inet:fqdn = $val
+                        <(seen)+ { yield $__commMod.getMetaSource() }
+                    ]
+                }
+
+                $nodes.append($node)
+            }
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addDynamicIPs(ontres) {
+    /*
+        Add a set of nodes when a network.dynamic.ip tag is found.
+
+        This adds the following nodes: it:host, it:exec:proc, inet:ipv4|ipv6, inet:flow
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:flow (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    if $ontres.results.tags."network.dynamic.ip" {
+        
+        $host = $_addHost($ontres)
+
+        for $val in $ontres.results.tags."network.dynamic.ip" {
+        
+            ($ok, $ipv4) = $lib.trycast("inet:ipv4", $val)
+
+            if $ok {
+
+                $proc = $_addExecProc($host, $ontres.file.sha256)
+
+                [ inet:flow = $lib.guid("assemblyline4", $ontres.file.sha256, $val)
+                    :src:host = $host
+                    :src:proc = $proc
+                    :dst:ipv4 = $val
+                    :sandbox:file = $ontres.file.sha256
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+                {
+                    [ inet:ipv4 = $ipv4
+                       <(seen)+ { yield $__commMod.getMetaSource() }
+                    ]
+                }
+                $nodes.append($node)
+            }
+            else {
+
+                ($ok, $ipv6) = $lib.trycast("inet:ipv6", $val)
+
+                if $ok {
+                    
+                    $proc = $_addExecProc($host, $ontres.file.sha256)
+                    
+                    [ inet:flow = $lib.guid("assemblyline4", $ontres.file.sha256, $val)
+                        :src:host = $host
+                        :src:proc = $proc
+                        :dst:ipv6 = $val
+                        :sandbox:file = $ontres.file.sha256
+                        <(seen)+ { yield $__commMod.getMetaSource() }
+                    ]
+                    {
+                        [ inet:ipv6 = $val
+                            <(seen)+ { yield $__commMod.getMetaSource() }
+                        ]
+                    }
+                    $nodes.append($node)
+                }
+            }
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addDynamicURIs(ontres) {
+    /*
+        Add a set of nodes when a network.dynamic.uri tag is found.
+
+        This adds the following nodes: it:host, it:exec:proc, inet:url, it:exec:url
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            it:exec:url (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    if $ontres.results.tags."network.dynamic.uri" {
+        
+        $host = $_addHost($ontres)
+
+        for $val in $ontres.results.tags."network.dynamic.uri" {
+
+            ($ok, $valu) = $lib.trycast("inet:url", $val)
+
+            if $ok {
+
+                $proc = $_addExecProc($host, $ontres.file.sha256)
+
+                [ it:exec:url = $lib.guid("assemblyline4", $ontres.file.sha256, $val)
+                    :host = $host
+                    :proc = $proc
+                    :sandbox:file = $ontres.file.sha256
+                    :url = $val
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+                
+                {
+                    [ inet:url = $val
+                        <(seen)+ { yield $__commMod.getMetaSource() }
+                    ]
+                }
+
+                $nodes.append($node)
+            }
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addEmailAddrs(ontres) {
+    /*
+        Add inet:email nodes when a network.email.address tag is present.
+
+        Create a refs light edge from the file:bytes to the inet:email
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:email (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."network.email.address" {
+
+        ($ok, $valu) = $lib.trycast("inet:email", $val)
+
+        if $ok {
+            [ inet:email = $val
+                <(seen)+ { yield $__commMod.getMetaSource() }
+                <(refs)+ { file:bytes=$ontres.file.sha256 }
+            ]
+
+            $nodes.append($node)
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addFile(ontres) {
+    /*
+        Add file:bytes node
+
+        Creates a refs light edge from the inet:web:group to the file:bytes
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            file:bytes (node): 
+    */
+    
+    [ file:bytes = $ontres.file.sha256
+        :md5 = $ontres.file.md5
+        :sha1 = $ontres.file.sha1
+        :_assemblyline:type ?= $ontres.file.type
+        .seen ?= $ontres.submission.date
+        <(seen)+ { yield $__commMod.getMetaSource() }
+        <(submitted)+ { 
+            if ($ontres.submission.submitter) {
+                [ inet:web:acct=($ontres.submission.source_system, $ontres.submission.submitter)
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+            }
+         }
+        <(refs)+ { yield $_addWebGroups($ontres) }
+        +#$_buildTagsForFileBytes($ontres)
+    ]
+
+    return ($node)
+}
+
+
+function addFilepathFromTags(ontres) {
+    /*
+        Add file:filepath nodes when a file.path tag is present.
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            file:filepath (list(node)): Return a list of nodes or empty list.
+    */
+    
+    $nodes = $lib.list()
+    
+    // These are all the file names as it was submitted to AL
+    for $val in $ontres.results.tags."file.path" {
+
+        if $__commMod.keepFileName($val) {
+            
+            [ file:filepath = ($ontres.file.sha256, $val)
+                <(seen)+ { yield $__commMod.getMetaSource() }
+            ]
+
+            $nodes.append($node)
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addPasswords(ontres) {
+    /*
+        Add inet:passwd nodes when info.password tags are present.
+
+        Create a refs light edge to the associated file:bytes
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:passwd (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."info.password" {
+
+        [ inet:passwd = $val
+            <(seen)+ { yield $__commMod.getMetaSource() }
+            // The ref is purposefully this direction +(refs)> for the password use-case
+            +(refs)> { file:bytes=$ontres.file.sha256 }
+        ]
+
+        $nodes.append($node)
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addStaticDomains(ontres) {
+    /*
+        Add inet:fqdn nodes when network.static.domain tags are present.
+
+        Create a refs light edge from the file:bytes to the inet:fqdn
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:fqdn (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."network.static.domain" {
+
+        ($ok, $valu) = $lib.trycast("inet:fqdn", $val)
+
+        if $ok {
+            [ inet:fqdn = $val
+                <(seen)+ { yield $__commMod.getMetaSource() }
+                <(refs)+ { file:bytes=$ontres.file.sha256 }
+            ]
+
+            $nodes.append($node)
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addStaticIPs(ontres) {
+    /*
+        Add inet:ipv4|ipv6 nodes when network.static.ip tags are present.
+
+        Create a refs light edge from the file:bytes to the inet:fqdn
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:ipv4|ipv6 (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."network.static.ip" {
+
+        ($ok, $ipv4) = $lib.trycast("inet:ipv4", $val)
+
+        if $ok {
+            [ inet:ipv4 = $ipv4
+                <(seen)+ { yield $__commMod.getMetaSource() }
+                <(refs)+ { file:bytes=$ontres.file.sha256 }
+            ]
+            $nodes.append($node)
+        }
+        else {
+
+            ($ok, $valu) = $lib.trycast("inet:ipv6", $val)
+
+            if $ok {
+                [ inet:ipv6 = $val
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                    <(refs)+ { file:bytes=$ontres.file.sha256 }
+                ]
+                $nodes.append($node)
+            }
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addStaticURIs(ontres) {
+    /*
+        Add inet:url nodes when network.static.uri tags are present.
+
+        Create a refs light edge from the file:bytes to the inet:url
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:url (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."network.static.uri" {
+
+        ($ok, $valu) = $lib.trycast("inet:url", $val)
+
+        if $ok {
+            [ inet:url = $val
+                <(seen)+ { yield $__commMod.getMetaSource() }
+                <(refs)+ { file:bytes=$ontres.file.sha256 }
+            ]
+
+            $nodes.append($node)
+        }
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addSubFile(ontres) {
+    /*
+        NOTE: The file.parent does not currently indicate the direct parent, but rather the submission's root file.
+        Opened issue: https://github.com/CybercentreCanada/assemblyline/issues/64
+        If CCCS fixes this issue, then this can be used instead of separately getting the submissionTree in 
+        al4.enrichSubmission(). If not, this should be removed.
+
+        Add a file:subfile node when the file.parent hash is present in the ontology result
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            file:subfile (list(node)): Return a node or $lib.null
+    */
+
+    if $ontres.file.parent {
+
+        [ file:subfile=($ontres.file.parent, $ontres.file.sha256)
+            <(seen)+ { yield $__commMod.getMetaSource() }
+        ]
+
+        return ($node)
+    }
+
+    return ($lib.null)
+}
+
+
+function addUserAgents(ontres) {
+    /*
+        Add inet:http:request:header nodes when network.user_agent tags are present.
+
+        Create a refs light edge from the file:bytes to the inet:http:request:header
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            inet:inet:http:request (list(node)): Return a list of nodes or empty list.
+    */
+
+    $nodes = $lib.list()
+
+    for $val in $ontres.results.tags."network.user_agent" {
+
+        [ inet:http:request:header = ("user-agent", $val)
+            <(seen)+ { yield $__commMod.getMetaSource() }
+            <(refs)+ { file:bytes=$ontres.file.sha256 }
+        ]
+
+        $nodes.append($node)
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($nodes)
+    }
+}
+
+
+function addYaraHits(ontres) {
+    /*
+        Add it:app:yara:match nodes when file.rule.yara tags are present.
+
+        This also creates the associated it:app:yara:rule node, but does not contain the yara rule text itself.
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            it:app:yara:match (list(node)): Return a list of nodes or empty list.
+    */
+
+    $yaraHits = $lib.list()
+    
+    for $yaraRuleTagVal in $ontres.results.tags."file.rule.yara" {
+
+        // create yara rule
+        $guid = $lib.guid(al4, $yaraRuleTagVal)
+
+        [ it:app:yara:match=($guid, $ontres.file.sha256)
+            .seen ?= $ontres.submission.date
+            <(seen)+ { yield $__commMod.getMetaSource() }
+        ]
+        
+        { 
+            -> it:app:yara:rule [ :name=$yaraRuleTagVal 
+                    <(seen)+ { yield $__commMod.getMetaSource() }
+                ]
+        }
+
+        $yaraHits.append($node)
+    }
+
+    // Must use fini block or it will stop processing after first item in for loop
+    fini {
+        return ($yaraHits)
+    }
+}
+
+
+
+
+function _addHost(ontres) {
+    /*
+        Create an it:host node
+
+        This is used to represent dynamic execution from the network.dynamic.x tags.
+        If there are multiple analytic results for the same sha256, all evidence objects will be associated to the same 
+        it:host. While there is a way to differentiate which AL4 analytic service created the dynamic tag, it seems like
+        overkill to create an it:host/it:exec combo per analytic service returning a network.dynamic.* tag.
+        
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            it:host (node):
+    */
+
+    [ it:host = $lib.guid("assemblyline4", $ontres.file.sha256)
+        :desc = "Assemblyline 4 Results"
+        <(seen)+ { yield $__commMod.getMetaSource() }
+    ]
+
+    return ($node)
+}
+
+
+function _addExecProc(host, sha256) {
+    /*
+        Create an it:exec:proc node
+
+        This is used to represent dynamic execution from the network.dynamic.x tags.
+        
+        A unique it:exec:proc will be created based on the sha256. So any other AL4 result for the same file will be
+        represented in this same proc.
+
+        Parameters:
+            host (it:host): The it:host to associate the proc to
+            sha256 (str):   The file hash to associate the proc to  
+
+        Returns:
+            it:exec:proc (node):
+    */
+    
+    [ it:exec:proc = $lib.guid("assemblyline4", $sha256)
+        :host = $host
+        :sandbox:file = $sha256
+        <(seen)+ { yield $__commMod.getMetaSource() }
+    ]
+
+    return ($node)
+}
+
+
+function _addWebGroups(ontres) {
+    /*
+        Create inet:web:group nodes based on the Assemblyline submission's releasability group
+
+        The AL releasability group is extracted from the ontology result's classification entry.
+        e.g. 
+            SOCGRP in this example where a sub-group is selected
+            "submission": {
+                "classification": "TLP:AMBER//SOCGRP",
+            }
+            
+            ORGA and ORGB in this example where two top level groups are selected
+            "submission": {
+                "classification": "TLP:WHITE//REL TO ORGA, ORGB",
+            }
+
+            SOCGRP and HUNTGRP in this example where two sub-groups are selected
+            "submission": {
+                "classification": "TLP:AMBER//SOCGRP/COMPANY",
+            }
+
+            Note: You cannot select both a top level group and a sub-group in Assemblyline.
+
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+
+        yields:
+            inet:web:group (node): yield a node per group created
+    */
+
+    if ($ontres.submission.classification) {
+
+        $allgroups = $ontres.submission.classification.split("//")
+
+        $groups = $lib.list()
+        // Look for a sub-group delination
+        if ($allgroups.size() > 1) {
+           $groups = $allgroups.1.split("/")
+        }
+
+        // Look for a top level group delination
+        if ($groups.size() = 1) {
+            $groups = $allgroups.1.split(",")
+        }
+        
+        for $g in $groups {
+            // Clean up group name
+            $g = $g.replace("REL TO", "")
+            $g = $g.strip()
+
+            [ inet:web:group=($ontres.submission.source_system, $g)
+                <(seen)+ { yield $__commMod.getMetaSource() }
+            ]
+        }
+    }
+}
+
+
+function _buildTagsForFileBytes(ontres) {
+    /*
+        Return a list of tags to associate to the file:bytes
+
+        Includes:
+        - base tag - e.g. rep.assemblyline
+        - TLP classification tag - if applicable
+        - Analytic Results tags from Assemblyline results tags - if applicable
+          - Some tags will have a value appended. e.g. <basetag>.attribution.actor.<val>
+          - Other tags will just be an indicator of presence. e.g. <basetag>.technique.keylogger
+        
+        Parameters:
+            ontres (dict): AL4 Ontology Result
+        
+        Returns:
+            tagname (list(str)): Return a list of tags.
+    */
+
+    $tags = $lib.list()
+    $basetag = $__privsepMod.getTagPrefix()
+
+    // add base tag
+    $tags.append($basetag)
+
+
+    // add TLP classification tag
+    if $ontres.submission.classification {
+        $class = $ontres.submission.classification.split("//").0.split(":")
+        // e.g. class = ['TLP', 'AMBER']
+        ($ok, $tagFormattedClass) = $lib.trycast(syn:tag:part, $class.1) 
+        if $ok {
+            $tags.append($lib.str.join('.', ($basetag, $class.0.lower(), $tagFormattedClass)))
+        }
+    }
+    
+
+    // add AL4 tags
+    for ($key, $val) in $ontres.results.tags {
+
+        switch $key {
+
+            "attribution.actor": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "attribution.campaign": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "attribution.exploit": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "attribution.family": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "attribution.implant": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "attribution.network": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "technique.comms_routine": { $tags.extend($_convertALTags($key)) }
+            "technique.config": { $tags.extend($_convertALTags($key)) }
+            "technique.crypto": { $tags.extend($_convertALTags($key)) }
+            "technique.keylogger": { $tags.extend($_convertALTags($key)) }
+            "technique.macro": { $tags.extend($_convertALTags($key)) }
+            "technique.masking_algo": { $tags.extend($_convertALTags($key)) }
+            "technique.obfuscation": { $tags.extend($_convertALTags($key)) }
+            "technique.packer": { $tags.extend($_convertALTags($key, alTagVals=$val)) }
+            "technique.persistence": { $tags.extend($_convertALTags($key)) }
+            "technique.shellcode": { $tags.extend($_convertALTags($key)) }
+        }
+    }
+
+    return ($tags)
+}
+
+
+function _convertALTags(alTagName, alTagVals=$lib.null) {
+    /*
+        Convert an Assemblyline tag value to a normalized synapse tag val
+
+        Parameters:
+            alTagName (str): Assemblyline Analytic Result tag name
+            alTagVals (list(str)): A list of Assemblyline Tag values 
+        
+        Returns:
+            tagname (list(str)): A list of Synapse normalized tags.
+
+            e.g. 
+                rep.assemblyline.technique.config  - When $alTagVals not specified
+                rep.assemblyline.attribution.actor.actorx - When values in $alTagVals
+    */
+    
+    $tags = $lib.list()
+
+    if ($alTagName) {
+        $basetag = $__privsepMod.getTagPrefix()
+        
+        $synTagBase = $lib.str.join('.', ($basetag, $alTagName))
+        
+        if (not $alTagVals) {
+        $tags.append($synTagBase)
+        }
+        else {
+
+            for $tagVal in $alTagVals {
+                
+                // conform the value to an acceptable synapse tag
+                ($ok, $part) = $lib.trycast(syn:tag:part, $tagVal) 
+                if $ok {
+                    $tags.append($lib.str.join('.', ($synTagBase, $part)))
+                }
+            }
+        }
+    }
+
+    return ($tags)
+}

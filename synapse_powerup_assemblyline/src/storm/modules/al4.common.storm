@@ -1,0 +1,176 @@
+/* al4.common
+
+    Internal functions commonly used across other Assemblyline Power-Up modules.
+*/
+
+init {
+    $apiHostVar = al4:apiHost
+    $apiCredsVar = al4:api_creds
+    $proxyVar = al4:proxy
+    $tagPrefixVar = al4:tag_prefix
+    $defaultTagPrefix = rep.assemblyline
+    $logMsgPkg = "usaa-assemblyline4"
+    $__consoleMsgPrefix = "usaa-assemblyline4"
+}
+
+
+function getMetaSource() {
+    /*
+        Init/Get the meta:source node.
+
+        Returns:
+            meta:source (node): The usaa-assemblyline4 meta:source node
+    */
+    [ meta:source=$modconf.source :name='usaa-assemblyline4' :type='usaa-assemblyline4' ]
+    return($node)
+}
+
+
+function getSHA256(n) {
+    /*
+        Return a sha256 value from the incoming node.
+
+        Parameters:
+            n (node): file:bytes | hash:sha256
+        
+        Returns:
+            sha256 (str): The sha256 property of the node
+    */
+
+    if ($n.form() = "file:bytes") {
+        return ($n.props.sha256)
+    }
+    elif ($n.form() = 'hash:sha256') {
+        return ($n.value())
+    }
+
+    return ($lib.null)
+}
+
+function keepFileName(fname) {
+    /*
+        Determines if the file name is worth modeling.
+
+        e.g. If the filename is just a "0", multiple dots, or a hash, then it's not.
+
+        Parameters:
+            fname (str): file name
+        
+        Returns:
+            keep or not (boolean): 
+    */
+    
+    if ($fname and ($fname != "0") and (not $lib.regex.matches("[\.]{2,}", $fname)) and (not $lib.regex.matches("[0-9a-f]{32,}", $fname))) {
+        return ($lib.true)
+    }
+    return ($lib.false)
+}
+
+
+function printDebug(msg, includeTime=$lib.true) {
+    /*
+        Print a debug message if $lib.debug is enabled.
+
+        This wraps the message with a prefix for consistency.
+    
+        Parameters:
+            msg (str): Message to print
+            includeTime (bool): Include a date/time in the msg
+        
+        Returns:
+            null
+
+    */
+    if $lib.debug {
+
+        if $includeTime {
+            $now = $lib.time.format($lib.time.now(), "%Y-%m-%dT%H:%M:%S")
+            $message = $lib.str.format("{pfx} - {time} - {msg}", pfx=$__consoleMsgPrefix, time=$now, msg=$msg)
+        }
+        else {
+            $message = $lib.str.format('{pfx} - {msg}', pfx=$__consoleMsgPrefix, msg=$msg)
+        }
+        
+        $lib.print($message)
+    }
+    
+    return ($lib.null)
+}
+
+
+function printInfo(msg) {
+    /*
+        Print an info message to the console output. 
+
+        This wraps the message with a prefix for consistency.
+
+        Parameters:
+            msg (str): Message to print
+        
+        Returns:
+            null
+    */
+
+    if $msg {
+        $message = $lib.str.format('{pfx} - {msg}', pfx=$__consoleMsgPrefix, msg=$msg)
+        
+        $lib.print($message)
+    }
+
+    return($lib.null)
+}
+
+
+function printWarning(msg) {
+    /*
+        Print a warning message to the console output. 
+
+        This wraps the message with a prefix for consistency.
+
+        Parameters:
+            msg (str): Message to print
+        
+        Returns:
+            null
+    */
+
+    if $msg {
+        $message = $lib.str.format('{pfx} - {msg}', pfx=$__consoleMsgPrefix, msg=$msg)
+        
+        $lib.warn($message)
+    }
+
+    return($lib.null)
+}
+
+
+function raise(exc, msg=$lib.null, ctx=$lib.null) {
+    /*
+        Raise an exception.
+
+        This wrapper gives a normalized message and adds context
+
+        :param exc (Exception): Name of Exception to raise
+        :param msg: Optional message to include in exception
+        :param ctx (dict): Optional additional context
+            It will initiate with ctx.package
+            Caller should specify "module" and "func" to give good context in the logs
+
+        :return: null
+    */
+    
+    if (not $ctx) { $ctx = $lib.dict() }
+    $ctx.package = $logMsgPkg
+
+    if $msg {
+        $message = $lib.str.format('{name} Exception - {msg}', name=$exc, msg=$msg)
+    }
+    else {
+        $message = $lib.str.format('{name} Exception', name=$exc)
+    }
+
+    $lib.raise($exc, $message, ctx=$ctx)
+
+    return ($lib.null)
+}
+

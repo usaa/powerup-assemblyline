@@ -1,0 +1,45 @@
+init {
+    $setupUserMod = $lib.import(al4.setup.user)
+}
+
+if ($cmdopts.apiuser and $cmdopts.apikey) {
+    if $cmdopts.self {
+        $lib.print("Setting Assemblyline API creds for the current user.")
+        $setupUserMod.setUserAPICreds($cmdopts.apiuser, $cmdopts.apikey)
+    }
+    else {
+        $lib.print("Setting Assemblyline API creds for all users.")
+        // User must have perms to import the al4.setup.admin module to set it globally
+        $setupAdminMod = $lib.import(al4.setup.admin)
+        $setupAdminMod.setGlobalAPICreds($cmdopts.apiuser, $cmdopts.apikey)
+    }
+    
+}
+else {
+    if ($cmdopts.remove) {
+        if $cmdopts.self {
+            $lib.print("Removing the Assemblyline API creds for the current user.")
+            $setupUserMod.removeUserAPICreds()
+        }
+        else {
+            $lib.print("Removing the Assemblyline API creds for all users.")
+            // User must have perms to import the al4.setup.admin module to set it globally
+            $setupAdminMod = $lib.import(al4.setup.admin)
+            $setupAdminMod.removeGlobalAPICreds()
+        }
+    }
+    elif ($cmdopts.show_creds) {
+        
+        if $cmdopts.self {
+            $lib.print("Currently configured API creds: {apicreds}", apicreds=$setupUserMod.getUserAPICreds())    
+        }
+        else {
+            // User must have perms to import the al4.setup.admin module to set it globally
+            $setupAdminMod = $lib.import(al4.setup.admin)
+            $lib.print("Currently configured API creds: {apicreds}", apicreds=$setupAdminMod.getGlobalAPICreds())    
+        }
+    }
+    else {
+        al4.setup.apicreds --help
+    }
+}

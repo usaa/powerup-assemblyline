@@ -1,0 +1,463 @@
+/* al4
+    USAA-Assemblyline API 
+
+    Interface into this Power-Up's functionality. Any functions here can be used by other modules or commands.
+*/
+
+init {
+    $__commMod = $lib.import(al4.common)
+    $__ingestMod = $lib.import(al4.ingest)
+    $__privsepMod = $lib.import(al4.privsep)
+    $__modName = "al4"
+}
+
+
+function downloadFile(n) {
+    /*
+        Download a file from Assemblyline into the Axon.
+        
+        Parameters:
+            n (node): file:bytes | hash:sha256
+        
+        Yields:
+            file:bytes (list(node)): Yield the associated file:bytes node(s)
+    */
+
+    if (not $n or ($n.form() != 'file:bytes' and $n.form() != 'hash:sha256')) {
+
+        // The typical power-up pattern is to only show this kind of warning if in debug mode.
+        // However, this is confusing as the user will not know there is an issue.
+        $__commMod.printWarning("downloadFile expected file:bytes or hash:sha256 node.")
+    }
+    else {
+
+        $sha256 = $__commMod.getSHA256($n)
+
+        if (not $sha256) {
+            $__commMod.printWarning($lib.str.format("sha256 not found on requested node. iden={iden}", iden=$n.iden()))
+        }
+        else {
+
+            $fnodes = $lib.list()
+
+            // download it from AL
+            $fileHashes = $__privsepMod.downloadFile($sha256)
+
+            if ($fileHashes) {
+
+                // update file:bytes nodes with further details
+                $file = $__ingestMod.addFile($fileHashes)
+
+                $fnodes.append($file)
+            }
+            
+            yield $fnodes
+        }
+    }
+}
+
+
+function enrichFile(n, asof="-30days") {
+    /*
+        Gather the Assemblyline analytic results for the specified file and model the results.	
+        
+        Parameters:
+            n (node): file:bytes | hash:sha256
+            asof (str): Use cache from within this timeframe.
+        
+        Yields:
+            list of nodes (list(node)): Yield unique, analytically relevant nodes
+    */
+
+    if (not $n or ($n.form() != 'file:bytes' and $n.form() != 'hash:sha256')) {
+
+        // The typical power-up pattern is to only show this kind of warning if in debug mode.
+        // However, this is confusing as the user will not know there is an issue.
+        $__commMod.printWarning("enrichFile expected file:bytes or hash:sha256 node.")
+    }
+    else {
+
+        $sha256 = $__commMod.getSHA256($n)
+
+        if (not $sha256) {
+            $__commMod.printWarning($lib.str.format("sha256 not found on requested node. iden={iden}", iden=$n.iden()))
+        }
+        else {
+            
+            // get raw ontology results from AL4 API
+            $ontResults = $__privsepMod.getFileOntologyResults($sha256, asof=$asof)
+            
+            if ($ontResults) {
+                
+                $nodes = $_processRawOntologyResults($ontResults)
+
+                yield $nodes | uniq
+            }
+        }
+    }
+}
+
+
+function enrichSubmission(sid, asof="-30days") {
+    /*
+        Gather the Assemblyline analytic results for the specified Assemblyline submission and model the results.	
+        
+        Parameters:
+            n (node): file:bytes | hash:sha256
+            asof (str): Use cache from within this timeframe.
+        
+        Yields:
+            list of nodes (list(node)): Yield unique, analytically relevant nodes
+    */
+
+    if (not $sid) {
+        // The typical power-up pattern is to only show this kind of warning if in debug mode.
+        // However, in this case, it would be confusing as the user will not know there is an issue.
+        $__commMod.printWarning("enrichSubmission expected sid")
+    }
+    else {
+
+        $nodes = $lib.list()
+
+        $__commMod.printDebug($lib.str.format("{sid} - getSubmissionFileTree()", sid=$sid))
+        $fileTree = $__privsepMod.getSubmissionFileTree($sid)
+
+        if $fileTree {
+            // Ingest the AL4 API submission tree results into the model
+            // Note: There is only one file in the root of the submission with AL4
+            $__commMod.printDebug($lib.str.format("{sid} - _processSubmissionTreeFiles()", sid=$sid))
+            for ($k, $v) in $fileTree.tree {
+                $nodes.extend($_processSubmissionTreeFiles($v))
+            }
+
+            $__commMod.printDebug($lib.str.format("{sid} - getSubmissionOntologyResults()", sid=$sid))
+
+            // get raw ontology results from AL4 API; only if the submission file tree is found
+            $ontResults = $__privsepMod.getSubmissionOntologyResults($sid, asof=$asof)
+            
+            
+            if $ontResults {
+                $__commMod.printDebug($lib.str.format("{sid} - _processRawOntologyResults()", sid=$sid))
+                $nodes.extend($_processRawOntologyResults($ontResults))
+            }
+            
+        }
+        
+        $__commMod.printDebug($lib.str.format("{sid} - enrichSubmission() complete", sid=$sid))
+
+        yield $nodes | uniq
+    }
+}
+
+
+function searchIndex(searchQuery, index, fields=$lib.null, sort=$lib.null) {
+    /*
+        Search a specific Assemblyline 4 datastore index.
+
+        Note: This will gather all results and return them all at once. 
+
+        Parameters:
+            searchQuery (str): AL Search Query
+            index (str): AL Index. e.g. submission
+            fields (str): Comma separate list of fields to return. e.g. "id,score"
+            sort (str): How to sort the results. e.g. field asc
+    
+        Returns:
+            list of results (list): List of AL Search Results. The actual results and not the metadata about the search.
+                e.g. This is a result item from a submission index search.
+                    {
+                        "archived": false,
+                        "classification": "TLP:WHITE",
+                        "error_count": 0,
+                        "file_count": 4,
+                        "from_archive": false,
+                        "id": "53tGo4lBhjr2l0s5CY8sa1",
+                        "max_score": 13,
+                        "params": {
+                            "description": "Inspection of URL: https://foo.local",
+                            "submitter": "admin"
+                        },
+                        "sid": "53tGo4lBhjr2l0s5CY8sa1",
+                        "state": "completed",
+                        "times": {
+                            "submitted": "2023-04-21T14:57:48.697835Z"
+                        },
+                        "to_be_deleted": false
+                    },
+    */
+    
+    // This errors instead of following the typical Power-up pattern since this mean to be an API method.
+    if (not $searchQuery) {
+        $__commMod.raise(BadArg,
+            msg="missing param: searchQuery",
+            ctx=({"module": $__modName, "func": "searchIndex"}))
+    }
+
+    if (not $index) {
+        $__commMod.raise(BadArg,
+            msg="missing param: index",
+            ctx=({"module": $__modName, "func": "searchIndex"}))
+    }
+
+    if $fields {
+        ($ok, $val) = $lib.trycast("str", $fields)
+        if (not $ok) {
+            $__commMod.raise(BadArg,
+                msg="fields param expects str",
+                ctx=({"module": $__modName, "func": "searchIndex"}))
+        }
+    }
+
+    $results = $lib.list()
+
+    $searchResults = $__privsepMod.searchIndex(
+        $searchQuery,
+        $index,
+        fields=$fields,
+        sort=$sort
+    )
+
+    if ($searchResults) {
+        // Add initial results
+        $results.extend($searchResults.items)
+
+        // Page through additional results
+        $pagingId = $searchResults.next_deep_paging_id
+
+        while ($pagingId) {
+            $nextResults = $__privsepMod.searchIndex(
+                $searchQuery,
+                $index,
+                fields=$fields,
+                sort=$sort,
+                pagingId=$pagingId
+            )
+            $results.extend($nextResults.items)
+
+            if $nextResults.next_deep_paging_id {
+                $pagingId = $nextResults.next_deep_paging_id
+            }
+            else {
+                $pagingId = $lib.null
+            }
+        }
+    }
+
+    return ($results)
+}
+
+function submitFile(fnode, waitForAnalysis=$lib.false, forceRescan=$lib.false) {
+    /*
+        Submit a file to Assemblyline for analysis.
+
+        Analysis result nodes will be yielded if waitForAnalysis is specified.
+        
+        Parameters:
+            fnode (node): file:bytes
+            waitForAnalysis (boolean): Wait for the analysis to complete
+            forceRescan (boolean): Tell Assemblyline to ignore the results cache
+        
+        Yields:
+            input node (node): Yield the input node and analysis results (if waitForAnalysis is True)
+    */
+        
+    // validate node form type
+    if (not $fnode or $fnode.form() != "file:bytes") {
+        $__commMod.printWarning("submitFile expected file:bytes node.")
+    }
+    else {
+
+        // Setup AL scan submission options
+        // other possible params: metadata, generate_alert, ..
+        $params = $lib.dict("ignore_cache"=$forceRescan)
+        $alSubmissionOpts = $lib.dict("params"=$params)
+        
+        $sid = $__privsepMod.submitFile($fnode, $alSubmissionOpts)
+
+        if $sid {
+
+            if $waitForAnalysis {
+
+                // Give AL a few seconds before querying for status
+                $lib.time.sleep(3)
+                
+                while (not $__privsepMod.isSubmissionCompleted($sid)) {
+                    $__commMod.printDebug($lib.str.format("Waiting for submission: {sid}", sid=$sid))
+
+                    $lib.time.sleep(10)
+                }
+
+                // Enrich
+                yield $enrichSubmission($sid)
+            }            
+        }
+    }    
+
+    yield $fnode
+}
+
+
+function submitURL(urlNode, waitForAnalysis=$lib.false, forceRescan=$lib.false, download=$lib.false) {
+    /*
+        Submit a URL to Assemblyline for analysis.
+
+        Analysis result nodes will be yielded if waitForAnalysis is specified.
+        
+        Parameters:
+            urlNode (node): inet:url
+            waitForAnalysis (boolean): Wait for the analysis to complete
+            forceRescan (boolean): Tell Assemblyline to ignore the results cache
+            download (boolean): Download the root file of the URL submission to the configured Axon
+        
+        Yields:
+            input node (node): Yield the input node and analysis results (if waitForAnalysis is True)
+    */
+
+    $nodes = $lib.list()
+
+    // validate node form type
+    if (not $urlNode or $urlNode.form() != "inet:url") {
+        $__commMod.printWarning("submitURL expected inet:url node.")
+    }
+    else {
+
+        // Setup AL scan submission options
+        // other possible params: metadata, generate_alert, ..
+        $params = $lib.dict("ignore_cache"=$forceRescan)
+        $alSubmissionOpts = $lib.dict("params"=$params)
+        
+        $sid = $__privsepMod.submitURL($urlNode, $alSubmissionOpts)
+
+        if $sid {
+
+            if $waitForAnalysis {
+
+                // Give AL a few seconds before querying for status
+                $lib.time.sleep(3)
+                
+                while (not $__privsepMod.isSubmissionCompleted($sid)) {
+                    $__commMod.printDebug($lib.str.format("Waiting for submission: {sid}", sid=$sid))
+                    $lib.time.sleep(10)
+                }
+
+                // download the file if requested
+                if $download {
+                    
+                    $fileTree = $__privsepMod.getSubmissionFileTree($sid)
+
+                    if $fileTree {
+                        // the root file of the submission is what AL obtained via the submitted URL
+                        for ($k, $v) in $fileTree.tree { 
+                            $rootSha256=$k 
+                            break
+                        }
+                        
+                        $fnode = $__ingestMod.addFile($lib.dict("sha256"=$rootSha256))
+                        $nodes.append($downloadFile($fnode))
+                    }
+                }
+
+                // Enrich
+                $nodes.append($enrichSubmission($sid))
+            }            
+        }
+    }    
+
+    $nodes.append($urlNode)
+
+    yield $nodes | uniq
+}
+
+
+
+function _processRawOntologyResults(ontResults) {
+    /*
+        Process the raw ontology results file from the AL4 API
+
+        Parameters:
+            ontResults (str): Ont result per line. Each line/result is in json format.
+        
+        Returns:
+            nodes (list(node)): A list of analytically important nodes from the results
+    */
+
+    $ontResults_lines = $ontResults.split("\n")
+            
+    $nodes = $lib.list()
+    
+    for $line in $ontResults_lines {
+        $l = $line.strip()
+        if ($l.size() > 0) {
+            // If any one ont result fails to process, want it visible. 
+            // So purposefully not trying to catch individual failures
+            $ont = $lib.json.load($line)
+
+            $nodes.extend($__ingestMod.addAnalysisResults($ont))
+        }
+    }
+
+    return ($nodes)
+}
+
+
+function _processSubmissionTreeFiles(treeItem, parentSha256=$lib.null) {
+    /*
+        Recursively process the AL4 submission tree API results into the model.
+
+        This create file:bytes, file:subfile, and file:filepath nodes.
+
+        Paramaters:
+            treeItem (dict): An individual submission tree entry's value. 
+                e.g. 
+                    {
+                        "children": {...},
+                        "name": [
+                            "CERTIFICATE",
+                            "overlay"
+                        ],
+                        "score": 0,
+                        "sha256": "b75f8852bd62c925fe0a257606d93b24049a71ee8bc1e9d5e08ea717b8125298",
+                        "size": 16040,
+                        "truncated": false,
+                        "type": "certificate/rsa"
+                    },
+            parentSha256 (str): The parent file's sha256.
+
+        Returns:
+            nodes (list(node)): A list of file:bytes nodes created from the submission tree
+    */
+
+    $nodes = $lib.list()
+
+    if $treeItem {
+        
+        // Only add subfile if there is a parent specified
+        if $parentSha256 {
+            
+            // Add the file:bytes node for the child file
+            $nodes.append(
+                $__ingestMod.addChildFile(
+                    $lib.dict("sha256"=$treeItem.sha256),
+                    $parentSha256,
+                    names=$treeItem.name,
+                    alFileType=$treeItem.type)
+            )
+        }
+        else {
+            // Adding the root file in the submission
+            $nodes.append(
+                $__ingestMod.addFile(
+                    $lib.dict("sha256"=$treeItem.sha256),
+                    names=$treeItem.name,
+                    alFileType=$treeItem.type)
+            )
+        }
+        
+        // recursively add children
+        for $child in $treeItem.children {
+            $nodes.extend($_processSubmissionTreeFiles($child.1, parentSha256=$treeItem.sha256))
+        }    
+    }
+
+    return ($nodes)
+}

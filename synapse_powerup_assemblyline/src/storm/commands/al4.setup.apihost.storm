@@ -1,0 +1,19 @@
+init {
+    $setupAdminMod = $lib.import(al4.setup.admin)
+}
+
+
+if $cmdopts.apihost {
+    $lib.print("Setting the API host for all users.")
+    $setupAdminMod.setGlobalAPIHost($cmdopts.apihost)
+}
+else {
+    if $cmdopts.show {
+        
+        $apiHost = $setupAdminMod.getGlobalAPIHost()
+        $lib.print("Currently configured API host: {host}", host=$apiHost)
+    }
+    else {
+        al4.setup.apihost --help
+    }
+}
